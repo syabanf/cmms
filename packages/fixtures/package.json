@@ -1,0 +1,17 @@
+{
+  "name": "@cmms/fixtures",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@cmms/types": "workspace:*"
+  },
+  "devDependencies": {
+    "@cmms/tsconfig": "workspace:*",
+    "typescript": "~5.9.3"
+  }
+}
