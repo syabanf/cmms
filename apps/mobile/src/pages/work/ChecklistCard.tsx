@@ -26,7 +26,7 @@ export function ChecklistCard({ wo, editable, hint }: { wo: WorkOrder; editable:
           <>
             <ProgressBar value={progress.ratio} tone="success" aria-label="Checklist progress" />
             {wo.tasks.map((task) => (
-              <TaskField key={task.id} woId={wo.id} task={task} editable={editable} inspection={wo.type === 'inspection'} />
+              <TaskField key={task.id} woId={wo.id} task={task} editable={editable} />
             ))}
           </>
         ) : (

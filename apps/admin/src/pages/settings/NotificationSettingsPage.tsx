@@ -117,6 +117,7 @@ function EventCard({ rule, firing, canEdit, onChannel, onRoles }: RowProps) {
               checked={rule.channels[channel]}
               onCheckedChange={(on) => onChannel(channel, on)}
               disabled={!canEdit}
+              aria-label={`${NOTIFICATION_EVENT_LABEL[rule.event]} by ${NOTIFICATION_CHANNEL_LABEL[channel]}`}
             />
           </label>
         ))}

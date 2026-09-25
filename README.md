@@ -15,7 +15,13 @@ Frontend for a computerized maintenance management system, built from the produc
 
 Master data (locations, asset types, failure codes, safety items, skills, teams, cost centers and
 warehouses) is edited under Settings › Master data in the console, and the phone reads the same lists:
-failure codes in the Findings step, safety items in the Safety step, locations for "my area".
+failure codes in the Findings step, safety items (hazards, PPE, lock-out points and permits) in the
+Safety step, locations for "my area".
+
+A scheduler in each app generates PM work orders when a schedule's lead time starts. Tools keep a
+movement log of every check-out and return, and go out for calibration by status rather than by work
+order. Requests keep their full triage history, and any checklist that warns or fails on completion
+raises a follow-up request.
 
 There is no backend yet. Both apps run on seeded fixtures through a reducer store, so every button works
 in the browser. Each app saves its demo state in local browser storage, which keeps changes across reloads.

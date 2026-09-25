@@ -158,8 +158,8 @@ export function CostCard({ wo, access }: { wo: WorkOrder; access: WoAccess }) {
             <dt className="font-semibold">Total</dt>
             <dd className="text-base font-bold tabular-nums">{fmtIdr(cost.total)}</dd>
           </div>
-          {reserved > 0 && <p className="text-xs text-muted">Plus {fmtIdr(reserved)} in reserved parts not yet issued.</p>}
         </dl>
+        {reserved > 0 && <p className="mt-2 text-xs text-muted">Plus {fmtIdr(reserved)} in reserved parts not yet issued.</p>}
       </CardContent>
       {editing && (
         <CostDialog
@@ -215,9 +215,22 @@ function CostDialog({ vendorCost, miscCost, onClose, onSave }: { vendorCost: num
 export function SafetyCard({ wo, onConfirm }: { wo: WorkOrder; onConfirm?: () => void }) {
   const { maps, personName } = useScoped()
   const { safety } = wo
-  const ppe = safety.ppeIds.map((id) => maps.safetyItem.get(id)?.name).filter(Boolean)
-  const hazards = safety.hazardIds.map((id) => maps.safetyItem.get(id)?.name).filter(Boolean)
+  const names = (ids: string[]) => ids.map((id) => maps.safetyItem.get(id)?.name).filter((name) => name !== undefined)
+  const hazards = names(safety.hazardIds)
+  const permits = names(safety.permitIds)
+  const lists = [
+    ['Lock out', names(safety.lotoIds)],
+    ['PPE', names(safety.ppeIds)],
+    ['Permits', permits],
+  ] as const
+  // A permit counts as held when its name matches one of the person's authorizations, ignoring case.
+  const holds = (personId: string, permit: string) =>
+    (maps.person.get(personId)?.technician?.authorizations ?? []).some((a) => a.toLowerCase() === permit.toLowerCase())
+  const gaps = permits
+    .map((permit) => ({ permit, missing: wo.assigneeIds.filter((id) => !holds(id, permit)) }))
+    .filter((g) => g.missing.length > 0)
   const confirmed = !!safety.confirmedAt
+  const needsConfirmation = safety.loto || safety.lotoIds.length > 0 || safety.permitIds.length > 0 || safety.ppeIds.length > 0
 
   return (
     <Card>
@@ -234,19 +247,26 @@ export function SafetyCard({ wo, onConfirm }: { wo: WorkOrder; onConfirm?: () =>
           ))}
           {!safety.loto && !hazards.length && <span className="text-muted">No special hazards listed</span>}
         </div>
-        {ppe.length > 0 && (
-          <p>
-            <span className="text-muted">PPE: </span>
-            {ppe.join(', ')}
+        {lists
+          .filter(([, items]) => items.length > 0)
+          .map(([label, items]) => (
+            <p key={label}>
+              <span className="text-muted">{label}: </span>
+              {items.join(', ')}
+            </p>
+          ))}
+        {gaps.map((g) => (
+          <p key={g.permit} className="text-xs font-medium text-warning">
+            {g.permit} not held by {g.missing.map((id) => personName(id)).join(', ')}
           </p>
-        )}
+        ))}
         {safety.notes && <p className="text-muted">{safety.notes}</p>}
         <div className={confirmed ? 'flex items-center gap-2 rounded-2xl bg-success-soft px-3 py-2 text-success' : 'flex items-center gap-2 rounded-2xl bg-surface px-3 py-2 text-body'}>
           {confirmed ? <ShieldCheck className="size-4 shrink-0" /> : <ShieldAlert className="size-4 shrink-0" />}
           <span className="min-w-0 flex-1 text-xs font-medium">
             {confirmed ? `Confirmed by ${personName(safety.confirmedBy)} · ${fmtWhen(safety.confirmedAt!)}` : 'Not confirmed yet. The technician confirms before starting.'}
           </span>
-          {!confirmed && onConfirm && (safety.loto || ppe.length > 0) && (
+          {!confirmed && onConfirm && needsConfirmation && (
             <Button size="sm" variant="outline" onClick={onConfirm}>
               Confirm
             </Button>

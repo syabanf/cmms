@@ -82,7 +82,7 @@ export function emptyWorkOrder(siteId: string, by: string, at: IsoDate, settings
     execution: 'internal',
     vendorId: null,
     downtime: false,
-    safety: { loto: false, ppeIds: [], hazardIds: [], notes: '', confirmedBy: null, confirmedAt: null },
+    safety: { loto: false, lotoIds: [], permitIds: [], ppeIds: [], hazardIds: [], notes: '', confirmedBy: null, confirmedAt: null },
     tasks: [],
     labor: [],
     parts: [],
@@ -110,7 +110,15 @@ export function applyJobPlan(wo: WorkOrder, plan: JobPlan, parts: ReadonlyMap<st
     title: wo.title || plan.name,
     estimatedMin: plan.durationMin,
     requiredTools: [...plan.toolCategories],
-    safety: { ...plan.safety, ppeIds: [...plan.safety.ppeIds], hazardIds: [...plan.safety.hazardIds], confirmedBy: null, confirmedAt: null },
+    safety: {
+      ...plan.safety,
+      lotoIds: [...plan.safety.lotoIds],
+      permitIds: [...plan.safety.permitIds],
+      ppeIds: [...plan.safety.ppeIds],
+      hazardIds: [...plan.safety.hazardIds],
+      confirmedBy: null,
+      confirmedAt: null,
+    },
     tasks,
     parts: plan.parts.map((p, i) => ({
       id: `p${i + 1}`,
@@ -195,6 +203,7 @@ export function emptyRequest(siteId: string, by: string, at: IsoDate): Maintenan
     triageNote: '',
     triagedBy: null,
     triagedAt: null,
+    events: [],
   }
 }
 
@@ -250,7 +259,7 @@ export function emptyJobPlan(at: IsoDate): JobPlan {
     personnel: 1,
     toolCategories: [],
     parts: [],
-    safety: { loto: false, ppeIds: [], hazardIds: [], notes: '' },
+    safety: { loto: false, lotoIds: [], permitIds: [], ppeIds: [], hazardIds: [], notes: '' },
     tasks: [],
     acceptance: '',
     sop: '',

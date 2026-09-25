@@ -1,8 +1,10 @@
 import type { WoPartLine, WorkOrder } from '@cmms/types'
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, EmptyState, cn, toast } from '@cmms/ui'
-import { Package, Plus } from 'lucide-react'
+import { ChevronRight, Package, Plus } from 'lucide-react'
 import { useState } from 'react'
+import { Link } from 'react-router'
 import { PartStatusBadge } from '../../components/badges'
+import { paths } from '../../lib/paths'
 import { useMobileScope } from '../../state/scope'
 import { AddPartSheet } from './AddPartSheet'
 
@@ -45,9 +47,15 @@ export function PartsCard({ wo, editable }: { wo: WorkOrder; editable: boolean }
           return (
             <div key={line.id} className="rounded-2xl bg-surface-2 p-3.5">
               <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold leading-snug">{part?.name ?? 'Removed part'}</p>
-                  <p className="mt-0.5 truncate text-[11px] text-muted">
+                <Link
+                  to={paths.part(line.partId)}
+                  className="flex min-h-11 min-w-0 flex-1 flex-col justify-center rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                >
+                  <span className="flex items-center gap-1 text-sm font-semibold leading-snug">
+                    {part?.name ?? 'Removed part'}
+                    <ChevronRight aria-hidden="true" className="size-4 shrink-0 text-muted" />
+                  </span>
+                  <span className="mt-0.5 block truncate text-[11px] text-muted">
                     <span className="font-mono">{part?.code}</span>
                     {line.status === 'reserved' ? (
                       <span className={cn('font-semibold', short ? 'text-accent' : 'text-success')}>
@@ -56,8 +64,8 @@ export function PartsCard({ wo, editable }: { wo: WorkOrder; editable: boolean }
                     ) : (
                       item?.bin && ` · ${item.bin}`
                     )}
-                  </p>
-                </div>
+                  </span>
+                </Link>
                 <PartStatusBadge status={line.status} />
               </div>
               <div className="mt-3 flex flex-wrap items-center justify-between gap-2">

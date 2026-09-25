@@ -21,6 +21,7 @@ import type {
   Person,
   PmSchedule,
   Rca,
+  RequestEvent,
   SafetyItem,
   Settings,
   Site,
@@ -33,6 +34,8 @@ import type {
   TaskResult,
   Tool,
   ToolCondition,
+  ToolMovement,
+  ToolMovementKind,
   ToolStatus,
   Vendor,
   WaitingReason,
@@ -41,14 +44,18 @@ import type {
   WoEvent,
   WoEventKind,
   WoPartLine,
+  WoStatus,
   WoTask,
+  WoType,
   WorkOrder,
 } from '@cmms/types'
 import { ACTIVE_WO_STATUSES, CHECK_OUTCOME_LABEL, WAITING_REASON_LABEL } from '@cmms/types'
 import { evaluateItem, worstOutcome } from './checklist'
+import { DAY, toMs } from './dates'
 import { newId } from './ids'
-import { nextMrCode, nextWoCode } from './factories'
+import { nextMrCode, nextWoCode, workOrderFromPm } from './factories'
 import { subtreeIds } from './org'
+import { openPmWorkOrder, pmDue } from './pm'
 import { approvalFor } from './wo'
 
 export interface AppState {
@@ -78,6 +85,7 @@ export interface AppState {
   stock: StockItem[]
   stockTxns: StockTxn[]
   tools: Tool[]
+  toolMovements: ToolMovement[]
   calibrations: CalibrationRecord[]
   rcas: Rca[]
   settings: Settings
@@ -135,6 +143,7 @@ export type AppAction =
   | Upsert<'tools', Tool>
   | Upsert<'rca', Rca>
   | { type: 'warrantyClaims/upsert'; item: WarrantyClaim }
+  | { type: 'warrantyClaims/remove'; id: string }
   | { type: 'people/setSkill'; id: string; skillId: string; level: SkillLevel }
   | { type: 'settings/update'; patch: Partial<Settings> }
   | { type: 'assets/setStatus'; id: string; status: AssetStatus }
@@ -165,16 +174,19 @@ export type AppAction =
   | { type: 'workOrders/addPart'; id: string; partId: string; qty: number; warehouseId: string }
   | { type: 'workOrders/partStatus'; id: string; lineId: string; status: 'issued' | 'consumed' | 'returned' }
   | { type: 'workOrders/removePart'; id: string; lineId: string }
-  | { type: 'workOrders/assignTool'; id: string; toolId: string }
+  /** `holderId` names who takes the tool; without it the acting technician or the first assignee does. */
+  | { type: 'workOrders/assignTool'; id: string; toolId: string; holderId?: string }
   | { type: 'workOrders/releaseTool'; id: string; toolId: string }
   | { type: 'workOrders/setFailure'; id: string; failure: FailureReport }
   | { type: 'workOrders/comment'; id: string; text: string }
   | { type: 'workOrders/attach'; id: string; attachment: Attachment }
   | { type: 'pm/generate'; id: string; workOrder: WorkOrder }
+  /** Generates a work order for every active schedule whose lead time has started. Run by the app clock. */
+  | { type: 'pm/autoGenerate' }
   | { type: 'stock/move'; partId: string; warehouseId: string; kind: StockTxnKind; qty: number; ref: string; note: string }
   | { type: 'stock/setBin'; id: string; bin: string }
   | { type: 'tools/checkout'; id: string; holderId: string; woId: string | null }
-  | { type: 'tools/checkin'; id: string; condition: ToolCondition }
+  | { type: 'tools/checkin'; id: string; condition: ToolCondition; note?: string }
   | { type: 'tools/setStatus'; id: string; status: ToolStatus }
   | { type: 'calibrations/record'; item: CalibrationRecord }
 
@@ -209,6 +221,8 @@ const partLabel = (state: AppState, partId: string, qty: number) => {
   return p ? `${qty} ${p.unit} ${p.code}` : `${qty} part`
 }
 const personName = (state: AppState, id: string) => state.people.find((p) => p.id === id)?.name ?? 'Unknown'
+
+const requestEvent = (meta: ActionMeta, status: RequestEvent['status'], note: string): RequestEvent => ({ id: newId('re'), at: meta.at, by: meta.by, status, note })
 
 function stockItem(state: AppState, partId: string, warehouseId: string): [AppState, StockItem] {
   const found = state.stock.find((s) => s.partId === partId && s.warehouseId === warehouseId)
@@ -249,13 +263,44 @@ function clockIn(wo: WorkOrder, personId: string, at: IsoDate): WorkOrder {
 const isTechOn = (state: AppState, wo: WorkOrder, personId: string) =>
   wo.assigneeIds.includes(personId) && !!state.people.find((p) => p.id === personId)?.technician
 
-/** Release every tool held by a work order. */
-function releaseTools(state: AppState, wo: WorkOrder): AppState {
+/** One line in the tool movement log. Check-outs carry the new holder, returns the previous one. */
+const movement = (meta: ActionMeta, tool: Tool, kind: ToolMovementKind, patch: Partial<ToolMovement> = {}): ToolMovement => ({
+  id: newId('tm'),
+  toolId: tool.id,
+  kind,
+  at: meta.at,
+  by: meta.by,
+  holderId: tool.holderId,
+  woId: tool.woId,
+  condition: null,
+  note: '',
+  ...patch,
+})
+
+const logMovements = (state: AppState, moves: ToolMovement[]): AppState =>
+  moves.length ? { ...state, toolMovements: [...state.toolMovements, ...moves] } : state
+
+/** Release every tool held by a work order and log the returns. */
+function releaseTools(state: AppState, wo: WorkOrder, meta: ActionMeta): AppState {
   if (!wo.toolIds.length) return state
-  return {
-    ...state,
-    tools: state.tools.map((t) => (wo.toolIds.includes(t.id) && t.woId === wo.id ? { ...t, status: 'available', holderId: null, woId: null } : t)),
-  }
+  const held = state.tools.filter((t) => wo.toolIds.includes(t.id) && t.woId === wo.id)
+  return logMovements(
+    { ...state, tools: state.tools.map((t) => (held.includes(t) ? { ...t, status: 'available', holderId: null, woId: null } : t)) },
+    held.map((t) => movement(meta, t, 'checkin', { note: 'Released with the work order' })),
+  )
+}
+
+/** Work that nobody started yet; deleting its PM schedule cancels it. */
+export const UNSTARTED_WO_STATUSES: readonly WoStatus[] = ['draft', 'open', 'assigned']
+
+function cancelWorkOrder(state: AppState, wo: WorkOrder, meta: ActionMeta, note: string): AppState {
+  const [s, released] = releaseReservations(releaseTools(state, wo, meta), wo)
+  const next = log(
+    { ...stopClocks(released, meta.at), status: 'cancelled', waitingReason: null, toolIds: [] },
+    event(meta, 'status', `Cancelled${note ? `: ${note}` : ''}`),
+  )
+  const after = patchWo(s, wo.id, () => next)
+  return wo.downtime ? refreshAssetStatus(after, wo.assetId) : after
 }
 
 /** Drop reservations that were never issued. */
@@ -294,8 +339,17 @@ function addWorkOrder(state: AppState, input: WorkOrder, meta: ActionMeta, creat
   return wo.downtime ? refreshAssetStatus(s, wo.assetId) : s
 }
 
-function inspectionFollowUp(state: AppState, wo: WorkOrder, meta: ActionMeta): AppState {
-  if (wo.type !== 'inspection') return state
+const FOLLOW_UP_TITLE: Record<WoType, string> = {
+  inspection: 'Inspection',
+  preventive: 'PM check',
+  calibration: 'Calibration check',
+  corrective: 'Post-repair check',
+  emergency: 'Post-repair check',
+  improvement: 'Post-work check',
+}
+
+/** A warning or failed checklist line raises a request, so the finding gets triaged instead of buried in the job. */
+function checklistFollowUp(state: AppState, wo: WorkOrder, meta: ActionMeta): AppState {
   const worst = worstOutcome(wo.tasks)
   if (worst !== 'warning' && worst !== 'fail') return state
   if (state.requests.some((r) => r.inspectionWoId === wo.id)) return state
@@ -306,14 +360,14 @@ function inspectionFollowUp(state: AppState, wo: WorkOrder, meta: ActionMeta): A
     code,
     siteId: wo.siteId,
     assetId: wo.assetId,
-    title: `Inspection ${CHECK_OUTCOME_LABEL[worst].toLowerCase()}: ${flagged
+    title: `${FOLLOW_UP_TITLE[wo.type]} ${CHECK_OUTCOME_LABEL[worst].toLowerCase()}: ${flagged
       .map((t) => `${t.label.toLowerCase()} ${t.result?.value ?? ''}${t.unit ? ` ${t.unit}` : ''}`)
       .join(', ')}`,
     description: `Raised automatically from ${wo.code}.`,
     severity: worst === 'fail' ? 'high' : 'medium',
     impact: 'none',
     status: 'new',
-    source: 'inspection',
+    source: wo.type === 'inspection' ? 'inspection' : 'technician',
     reportedBy: meta.by,
     reportedAt: meta.at,
     attachments: [],
@@ -323,8 +377,9 @@ function inspectionFollowUp(state: AppState, wo: WorkOrder, meta: ActionMeta): A
     triageNote: '',
     triagedBy: null,
     triagedAt: null,
+    events: [],
   }
-  return patchWo({ ...state, requests: [...state.requests, request] }, wo.id, (w) => log(w, event(meta, 'comment', `Raised ${code} from the inspection result`)))
+  return patchWo({ ...state, requests: [...state.requests, request] }, wo.id, (w) => log(w, event(meta, 'comment', `Raised ${code} from the checklist result`)))
 }
 
 function completePm(state: AppState, wo: WorkOrder): AppState {
@@ -464,6 +519,8 @@ export function reduce(state: AppState, { action, meta }: Envelope): AppState {
       }
     case 'warrantyClaims/upsert':
       return { ...state, warrantyClaims: upsert(state.warrantyClaims, action.item) }
+    case 'warrantyClaims/remove':
+      return { ...state, warrantyClaims: without(state.warrantyClaims, action.id) }
 
     // requests
     case 'requests/create':
@@ -483,6 +540,7 @@ export function reduce(state: AppState, { action, meta }: Envelope): AppState {
                 duplicateOfId: action.status === 'duplicate' ? (action.duplicateOfId ?? null) : null,
                 triagedBy: meta.by,
                 triagedAt: meta.at,
+                events: [...r.events, requestEvent(meta, action.status, action.note)],
               }
             : r,
         ),
@@ -493,7 +551,17 @@ export function reduce(state: AppState, { action, meta }: Envelope): AppState {
       return {
         ...s,
         requests: s.requests.map((r) =>
-          r.id === action.id ? { ...r, status: 'converted', woId: action.workOrder.id, triagedBy: meta.by, triagedAt: meta.at } : r,
+          r.id === action.id
+            ? {
+                ...r,
+                status: 'converted',
+                woId: action.workOrder.id,
+                triageNote: '',
+                triagedBy: meta.by,
+                triagedAt: meta.at,
+                events: [...r.events, requestEvent(meta, 'converted', '')],
+              }
+            : r,
         ),
       }
     }
@@ -504,6 +572,24 @@ export function reduce(state: AppState, { action, meta }: Envelope): AppState {
     case 'pm/generate': {
       const pm = state.pmSchedules.find((p) => p.id === action.id)
       return addWorkOrder(state, action.workOrder, meta, `Generated from ${pm?.code ?? 'PM schedule'}`)
+    }
+    case 'pm/autoGenerate': {
+      const now = toMs(meta.at)
+      const meters = new Map(state.meters.map((m) => [m.id, m]))
+      const parts = new Map(state.parts.map((p) => [p.id, p]))
+      let s = state
+      for (const pm of state.pmSchedules) {
+        if (!pm.active || openPmWorkOrder(pm, s.workOrders)) continue
+        const due = pmDue(pm, meters, now)
+        if (due.dueAt - pm.leadDays * DAY > now) continue
+        const plan = s.jobPlans.find((p) => p.id === pm.jobPlanId)
+        const asset = s.assets.find((a) => a.id === pm.assetId)
+        const warehouse = s.warehouses.find((w) => w.siteId === pm.siteId)
+        if (!plan || !asset || !warehouse) continue
+        const wo = workOrderFromPm(pm, plan, asset, parts, warehouse.id, due.dueAt, s.settings, meta.by, meta.at)
+        s = addWorkOrder(s, wo, meta, `Generated from ${pm.code}, ${pm.leadDays} days before it falls due`)
+      }
+      return s
     }
     case 'workOrders/update': {
       const before = state.workOrders.find((w) => w.id === action.id)
@@ -583,7 +669,7 @@ export function reduce(state: AppState, { action, meta }: Envelope): AppState {
     case 'workOrders/complete': {
       const wo = state.workOrders.find((w) => w.id === action.id)
       if (!wo) return state
-      let [s, next] = releaseReservations(releaseTools(state, wo), wo)
+      let [s, next] = releaseReservations(releaseTools(state, wo, meta), wo)
       next = stopClocks(next, meta.at)
       next = {
         ...next,
@@ -598,7 +684,7 @@ export function reduce(state: AppState, { action, meta }: Envelope): AppState {
       next = log(next, event(meta, 'status', action.note ? `Marked complete: ${action.note}` : 'Marked complete'))
       s = patchWo(s, action.id, () => next)
       s = completePm(s, next)
-      s = inspectionFollowUp(s, next, meta)
+      s = checklistFollowUp(s, next, meta)
       return wo.downtime ? refreshAssetStatus(s, wo.assetId) : s
     }
     case 'workOrders/verify':
@@ -619,14 +705,7 @@ export function reduce(state: AppState, { action, meta }: Envelope): AppState {
       )
     case 'workOrders/cancel': {
       const wo = state.workOrders.find((w) => w.id === action.id)
-      if (!wo) return state
-      const [s, released] = releaseReservations(releaseTools(state, wo), wo)
-      const next = log(
-        { ...stopClocks(released, meta.at), status: 'cancelled', waitingReason: null, toolIds: [] },
-        event(meta, 'status', `Cancelled${action.note ? `: ${action.note}` : ''}`),
-      )
-      const after = patchWo(s, action.id, () => next)
-      return wo.downtime ? refreshAssetStatus(after, wo.assetId) : after
+      return wo ? cancelWorkOrder(state, wo, meta, action.note) : state
     }
     case 'workOrders/clock':
       return patchWo(state, action.id, (w) => {
@@ -720,22 +799,21 @@ export function reduce(state: AppState, { action, meta }: Envelope): AppState {
       const wo = state.workOrders.find((w) => w.id === action.id)
       const tool = state.tools.find((t) => t.id === action.toolId)
       if (!wo || !tool || wo.toolIds.includes(tool.id)) return state
-      const holder = isTechOn(state, wo, meta.by) ? meta.by : (wo.assigneeIds[0] ?? meta.by)
-      const s: AppState = {
-        ...state,
-        tools: state.tools.map((t) => (t.id === tool.id ? { ...t, status: 'in_use', holderId: holder, woId: wo.id } : t)),
-      }
+      const holder = action.holderId ?? (isTechOn(state, wo, meta.by) ? meta.by : (wo.assigneeIds[0] ?? meta.by))
+      const s = logMovements(
+        { ...state, tools: state.tools.map((t) => (t.id === tool.id ? { ...t, status: 'in_use', holderId: holder, woId: wo.id } : t)) },
+        [movement(meta, tool, 'checkout', { holderId: holder, woId: wo.id })],
+      )
       return patchWo(s, action.id, (w) => log({ ...w, toolIds: [...w.toolIds, tool.id] }, event(meta, 'tool', `Checked out ${tool.code} ${tool.name}`)))
     }
     case 'workOrders/releaseTool': {
-      const tool = state.tools.find((t) => t.id === action.toolId)
-      const s: AppState = {
-        ...state,
-        tools: state.tools.map((t) => (t.id === action.toolId ? { ...t, status: 'available', holderId: null, woId: null } : t)),
-      }
-      return patchWo(s, action.id, (w) =>
-        log({ ...w, toolIds: w.toolIds.filter((id) => id !== action.toolId) }, event(meta, 'tool', `Returned ${tool?.code ?? 'tool'}`)),
+      const tool = state.tools.find((t) => t.id === action.toolId && t.woId === action.id)
+      if (!tool) return state
+      const s = logMovements(
+        { ...state, tools: state.tools.map((t) => (t.id === tool.id ? { ...t, status: 'available', holderId: null, woId: null } : t)) },
+        [movement(meta, tool, 'checkin')],
       )
+      return patchWo(s, action.id, (w) => log({ ...w, toolIds: w.toolIds.filter((id) => id !== tool.id) }, event(meta, 'tool', `Returned ${tool.code}`)))
     }
     case 'workOrders/setFailure': {
       const mode = state.failureCodes.find((f) => f.id === action.failure.modeId)?.name
@@ -757,8 +835,14 @@ export function reduce(state: AppState, { action, meta }: Envelope): AppState {
     // PM & job plans
     case 'pm/upsert':
       return { ...state, pmSchedules: upsert(state.pmSchedules, action.item) }
-    case 'pm/remove':
-      return { ...state, pmSchedules: without(state.pmSchedules, action.id) }
+    case 'pm/remove': {
+      // Generated work nobody started goes with the schedule; work in progress keeps running.
+      let s: AppState = { ...state, pmSchedules: without(state.pmSchedules, action.id) }
+      for (const wo of state.workOrders) {
+        if (wo.pmScheduleId === action.id && UNSTARTED_WO_STATUSES.includes(wo.status)) s = cancelWorkOrder(s, wo, meta, 'PM schedule deleted')
+      }
+      return s
+    }
     case 'jobPlans/upsert':
       return { ...state, jobPlans: upsert(state.jobPlans, action.item) }
     case 'jobPlans/remove':
@@ -785,19 +869,32 @@ export function reduce(state: AppState, { action, meta }: Envelope): AppState {
       return { ...state, tools: upsert(state.tools, action.item) }
     case 'tools/remove':
       return { ...state, tools: without(state.tools, action.id) }
-    case 'tools/checkout':
-      return {
-        ...state,
-        tools: state.tools.map((t) => (t.id === action.id ? { ...t, status: 'in_use', holderId: action.holderId, woId: action.woId } : t)),
-      }
-    case 'tools/checkin':
-      return {
-        ...state,
-        tools: state.tools.map((t) =>
-          t.id === action.id ? { ...t, status: action.condition === 'poor' ? 'maintenance' : 'available', condition: action.condition, holderId: null, woId: null } : t,
-        ),
-        workOrders: state.workOrders.map((w) => (w.toolIds.includes(action.id) ? { ...w, toolIds: w.toolIds.filter((id) => id !== action.id) } : w)),
-      }
+    case 'tools/checkout': {
+      const tool = state.tools.find((t) => t.id === action.id)
+      if (!tool) return state
+      return logMovements(
+        { ...state, tools: state.tools.map((t) => (t.id === tool.id ? { ...t, status: 'in_use', holderId: action.holderId, woId: action.woId } : t)) },
+        [movement(meta, tool, 'checkout', { holderId: action.holderId, woId: action.woId })],
+      )
+    }
+    case 'tools/checkin': {
+      const tool = state.tools.find((t) => t.id === action.id)
+      if (!tool) return state
+      return logMovements(
+        {
+          ...state,
+          tools: state.tools.map((t) =>
+            t.id === tool.id ? { ...t, status: action.condition === 'poor' ? 'maintenance' : 'available', condition: action.condition, holderId: null, woId: null } : t,
+          ),
+          workOrders: state.workOrders.map((w) =>
+            w.toolIds.includes(tool.id)
+              ? log({ ...w, toolIds: w.toolIds.filter((id) => id !== tool.id) }, event(meta, 'tool', `Returned ${tool.code}`))
+              : w,
+          ),
+        },
+        [movement(meta, tool, 'checkin', { condition: action.condition, note: action.note ?? '' })],
+      )
+    }
     case 'tools/setStatus':
       return { ...state, tools: state.tools.map((t) => (t.id === action.id ? { ...t, status: action.status } : t)) }
     case 'calibrations/record': {
@@ -810,7 +907,9 @@ export function reduce(state: AppState, { action, meta }: Envelope): AppState {
         tools:
           r.target.kind === 'tool'
             ? state.tools.map((t) =>
-                t.id === r.target.id ? { ...t, calibration: plan(t.calibration), status: r.result === 'fail' ? 'maintenance' : t.status } : t,
+                t.id === r.target.id
+                  ? { ...t, calibration: plan(t.calibration), status: r.result === 'fail' ? 'maintenance' : t.status === 'calibration' ? 'available' : t.status }
+                  : t,
               )
             : state.tools,
       }

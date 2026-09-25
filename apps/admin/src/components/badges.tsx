@@ -153,7 +153,7 @@ export function OutcomeBadge({ outcome }: { outcome: CheckOutcome | null }) {
   return <Badge variant={OUTCOME_VARIANT[outcome]}>{CHECK_OUTCOME_LABEL[outcome]}</Badge>
 }
 
-const TOOL_VARIANT: Record<ToolStatus, Variant> = { available: 'success', in_use: 'info', maintenance: 'warning', lost: 'danger' }
+const TOOL_VARIANT: Record<ToolStatus, Variant> = { available: 'success', in_use: 'info', calibration: 'info', maintenance: 'warning', lost: 'danger' }
 
 export function ToolStatusBadge({ status }: { status: ToolStatus }) {
   return (

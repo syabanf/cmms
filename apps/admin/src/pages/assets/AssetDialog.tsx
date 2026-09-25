@@ -162,6 +162,12 @@ function AssetForm({
   const parentName = preset?.parentId ? maps.asset.get(preset.parentId)?.code : undefined
   const total = criticalityTotal(draft.scores)
   const criticality = criticalityFromScores(draft.scores)
+  // A new asset starts from its type's default scores; the note goes once the planner changes one.
+  const typeDefault = asset ? null : (type?.defaultScores ?? null)
+  const typeDefaultNote =
+    type && typeDefault && SCORE_FACTORS.every((f) => draft.scores[f.key] === typeDefault[f.key])
+      ? ` Starting from the ${type.name} default.`
+      : ''
 
   // A component cannot sit under itself or one of its own components.
   const blocked = useMemo(() => (asset ? subtreeIds(assets, asset.id) : new Set<string>()), [assets, asset])
@@ -296,8 +302,12 @@ function AssetForm({
             value={draft.typeId}
             invalid={tried && !!errors.typeId}
             onChange={(typeId) => {
-              const instrument = typeId ? maps.assetType.get(typeId)?.category === 'instrument' : false
-              set({ typeId, ...(!asset && instrument ? { calibrationOn: true } : {}) })
+              const next = typeId ? maps.assetType.get(typeId) : undefined
+              set({
+                typeId,
+                ...(!asset && next?.category === 'instrument' ? { calibrationOn: true } : {}),
+                ...(!asset && next?.defaultScores ? { scores: { ...next.defaultScores } } : {}),
+              })
             }}
           />
         </FormField>
@@ -415,6 +425,7 @@ function AssetForm({
               </p>
               <p className="mt-0.5 text-xs text-muted">
                 Score each factor from 1 (low) to 5 (high). {CLASS_RULE}
+                {typeDefaultNote}
               </p>
             </div>
             <div className="flex items-center gap-2">

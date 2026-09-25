@@ -170,7 +170,7 @@ function CompletedView({ wo, fallback }: { wo: WorkOrder; fallback: string }) {
             ? `${supervisor} verifies the result on this critical machine next.`
             : `${supervisor} reviews it and closes the work order.`}
         </p>
-        {raised && <p>{raised.code} was raised from the inspection result.</p>}
+        {raised && <p>{raised.code} was raised from the checklist result.</p>}
         {nextJob ? (
           <div className="mt-5 rounded-2xl bg-white/5 p-4">
             <Kicker className="text-on-ink-muted">Your next job</Kicker>

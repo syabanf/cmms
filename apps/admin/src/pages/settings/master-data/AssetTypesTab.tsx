@@ -1,12 +1,14 @@
-import { fmtNumber, newId, plural } from '@cmms/fixtures'
-import type { AssetCategory, AssetIconKey, AssetType } from '@cmms/types'
+import { criticalityFromScores, criticalityTotal, fmtNumber, newId, plural } from '@cmms/fixtures'
+import type { AssetCategory, AssetIconKey, AssetType, CriticalityScores } from '@cmms/types'
 import { ASSET_CATEGORY_LABEL } from '@cmms/types'
-import { Card, type Column, DataTable, FormField, IconTile, Input, NativeSelect, cn, toast } from '@cmms/ui'
+import { Card, type Column, DataTable, FormField, IconTile, Input, NativeSelect, Switch, cn, toast } from '@cmms/ui'
 import { Shapes } from 'lucide-react'
 import { useMemo } from 'react'
+import { CriticalityBadge } from '../../../components/badges'
 import { AssetIcon } from '../../../components/icons'
 import { useHistoryState, useTableHistory } from '../../../lib/history-state'
 import { useScoped } from '../../../state/scoped'
+import { CLASS_RULE, SCORE_FACTORS } from '../../assets/lib'
 import { isTaken, matches, searchTerms, tally, usageOf } from './lib'
 import {
   DeleteDialog,
@@ -54,6 +56,9 @@ const iconName = (key: AssetIconKey) => (key === 'plc' ? 'PLC' : key[0].toUpperC
 
 const CATEGORIES = Object.keys(ASSET_CATEGORY_LABEL) as AssetCategory[]
 const CATEGORY_OPTIONS = CATEGORIES.map((c) => ({ value: c, label: ASSET_CATEGORY_LABEL[c] }))
+const SCORE_OPTIONS = [1, 2, 3, 4, 5].map((n) => ({ value: String(n), label: String(n) }))
+/** Where the scores start when a type first gets a default. */
+const MID_SCORES: CriticalityScores = { production: 3, safety: 3, quality: 3, replacementCost: 3, redundancy: 3 }
 
 export function AssetTypesTab({ canEdit }: { canEdit: boolean }) {
   const { state, dispatch } = useScoped()
@@ -82,6 +87,7 @@ export function AssetTypesTab({ canEdit }: { canEdit: boolean }) {
             <p className="font-semibold">{t.name}</p>
             <p className="text-xs sm:hidden text-muted">
               {ASSET_CATEGORY_LABEL[t.category]} · {plural(assetCount.get(t.id) ?? 0, 'asset')}
+              {t.defaultScores ? ` · Class ${criticalityFromScores(t.defaultScores)} default` : ''}
             </p>
           </div>
         </div>
@@ -93,6 +99,18 @@ export function AssetTypesTab({ canEdit }: { canEdit: boolean }) {
       hideBelow: 'sm',
       sortValue: (t) => ASSET_CATEGORY_LABEL[t.category],
       cell: (t) => ASSET_CATEGORY_LABEL[t.category],
+    },
+    {
+      id: 'default',
+      header: 'Default class',
+      hideBelow: 'md',
+      sortValue: (t) => (t.defaultScores ? criticalityFromScores(t.defaultScores) : 'Z'),
+      cell: (t) =>
+        t.defaultScores ? (
+          <CriticalityBadge criticality={criticalityFromScores(t.defaultScores)} long />
+        ) : (
+          <span className="text-muted">None</span>
+        ),
     },
     {
       id: 'icon',
@@ -207,6 +225,8 @@ function AssetTypeForm({
     name: editing?.name ?? '',
     category: editing?.category ?? ('production' as AssetCategory),
     icon: editing?.icon ?? ('motor' as AssetIconKey),
+    hasDefault: !!editing?.defaultScores,
+    scores: editing?.defaultScores ?? MID_SCORES,
   }))
   const name = draft.name.trim()
   const errors = {
@@ -227,6 +247,7 @@ function AssetTypeForm({
       name,
       category: draft.category,
       icon: draft.icon,
+      defaultScores: draft.hasDefault ? { ...draft.scores } : null,
     }
     dispatch({ type: 'assetTypes/upsert', item })
     onDone(item)
@@ -280,6 +301,50 @@ function AssetTypeForm({
           ))}
         </div>
       </FormField>
+      <div className="space-y-3 sm:col-span-2">
+        <label className="flex cursor-pointer items-center justify-between gap-3 rounded-2xl bg-surface px-4 py-3">
+          <span className="min-w-0">
+            <span className="block text-sm font-medium">No default</span>
+            <span className="block text-xs text-muted">
+              {draft.hasDefault
+                ? 'New assets of this type start from the scores below.'
+                : "New assets of this type start from the register's standard scores."}
+            </span>
+          </span>
+          <Switch checked={!draft.hasDefault} onCheckedChange={(none) => set({ hasDefault: !none })} aria-label="No default" />
+        </label>
+        {draft.hasDefault && (
+          <section className="rounded-2xl bg-surface-2 p-4" aria-labelledby="at-scores-title">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-[12rem] flex-1">
+                <p id="at-scores-title" className="text-sm font-semibold">
+                  Default criticality
+                </p>
+                <p className="mt-0.5 text-xs text-muted">Score each factor from 1 (low) to 5 (high). {CLASS_RULE}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="flex items-start gap-0.5 leading-none">
+                  <span className="text-2xl font-bold tabular-nums">{criticalityTotal(draft.scores)}</span>
+                  <span className="pt-0.5 text-xs font-semibold text-muted">/25</span>
+                </span>
+                <CriticalityBadge criticality={criticalityFromScores(draft.scores)} long />
+              </div>
+            </div>
+            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {SCORE_FACTORS.map((factor) => (
+                <FormField key={factor.key} label={factor.label} hint={factor.hint} htmlFor={`at-score-${factor.key}`}>
+                  <NativeSelect
+                    id={`at-score-${factor.key}`}
+                    options={SCORE_OPTIONS}
+                    value={String(draft.scores[factor.key])}
+                    onChange={(e) => set({ scores: { ...draft.scores, [factor.key]: Number(e.target.value) } })}
+                  />
+                </FormField>
+              ))}
+            </div>
+          </section>
+        )}
+      </div>
     </EntityForm>
   )
 }

@@ -6,6 +6,7 @@ import type {
   AssetIconKey,
   AssetStatus,
   AttachmentKind,
+  AttachmentStage,
   Availability,
   CalibrationResult,
   CapaKind,
@@ -36,6 +37,7 @@ import type {
   SkillLevel,
   StockTxnKind,
   ToolCondition,
+  ToolMovementKind,
   ToolStatus,
   WaitingReason,
   WarrantyClaimStatus,
@@ -148,6 +150,8 @@ export interface AssetType {
   name: string
   category: AssetCategory
   icon: AssetIconKey
+  /** Starting criticality scores for a new asset of this type; null when the type sets none. */
+  defaultScores: CriticalityScores | null
 }
 
 /** Each factor scores 1 (low) to 5 (high). Redundancy scores high when no backup exists. */
@@ -270,6 +274,10 @@ export interface SafetyItem {
 
 export interface SafetyRequirement {
   loto: boolean
+  /** Isolation points to lock and tag (safety items of kind loto). */
+  lotoIds: string[]
+  /** Permits the technician must hold (safety items of kind permit). */
+  permitIds: string[]
   ppeIds: string[]
   hazardIds: string[]
   notes: string
@@ -351,8 +359,20 @@ export interface Attachment {
   name: string
   /** Object URL for files added in this session; null for seeded placeholders. */
   url: string | null
+  /** Before or after the work; null for documents and photos taken during it. */
+  stage: AttachmentStage | null
   at: IsoDate
   by: string
+}
+
+/** One triage decision on a request, oldest first. */
+export interface RequestEvent {
+  id: string
+  at: IsoDate
+  by: string
+  /** The status the decision moved the request to. */
+  status: RequestStatus
+  note: string
 }
 
 export interface MaintenanceRequest {
@@ -371,11 +391,13 @@ export interface MaintenanceRequest {
   attachments: Attachment[]
   woId: string | null
   duplicateOfId: string | null
-  /** Inspection work order that raised the request, when source is inspection. */
+  /** Work order whose checklist raised the request; inspections set the source to inspection. */
   inspectionWoId: string | null
+  /** The latest decision, kept for quick reads; `events` holds all of them. */
   triageNote: string
   triagedBy: string | null
   triagedAt: IsoDate | null
+  events: RequestEvent[]
 }
 
 export interface TaskResult {
@@ -557,6 +579,20 @@ export interface Tool {
   calibration: CalibrationPlan | null
   holderId: string | null
   woId: string | null
+}
+
+/** One check-out or return of a tool. The tool's own status shows where it is right now. */
+export interface ToolMovement {
+  id: string
+  toolId: string
+  kind: ToolMovementKind
+  at: IsoDate
+  by: string
+  holderId: string | null
+  woId: string | null
+  /** Condition noted on return; null on check-out. */
+  condition: ToolCondition | null
+  note: string
 }
 
 export interface CalibrationRecord {

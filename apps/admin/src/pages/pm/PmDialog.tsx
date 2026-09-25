@@ -369,7 +369,7 @@ function PmForm({ pm, presetPlanId, onClose }: { pm: PmSchedule | null; presetPl
             />
           </FormField>
         )}
-        <FormField label="Lead time" htmlFor="pm-lead" error={err('leadDays')} hint="Days before the due date to generate the work order.">
+        <FormField label="Lead time" htmlFor="pm-lead" error={err('leadDays')} hint="The scheduler creates the work order this many days before the due date.">
           <Input
             id="pm-lead"
             type="number"

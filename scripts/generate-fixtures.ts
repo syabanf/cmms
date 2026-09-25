@@ -3,7 +3,19 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import type { MaintenanceRequest, MeterReading, StockItem, StockTxn, WorkOrder } from '../packages/types/src/index.ts'
+import type {
+  AssetType,
+  CriticalityScores,
+  MaintenanceRequest,
+  MeterReading,
+  StockItem,
+  StockTxn,
+  Tool,
+  ToolCondition,
+  ToolMovement,
+  ToolMovementKind,
+  WorkOrder,
+} from '../packages/types/src/index.ts'
 import { ACTIVE_WO_STATUSES } from '../packages/types/src/index.ts'
 import { worstOutcome } from '../packages/fixtures/src/checklist.ts'
 import { DAY, HOUR, MINUTE, addDays, startOfDay, startOfWeek, toIso } from '../packages/fixtures/src/dates.ts'
@@ -145,6 +157,54 @@ const liveTools = tools.map((tool) => {
   return wo ? { ...tool, status: 'in_use' as const, holderId: wo.assigneeIds[0] ?? null, woId: wo.id } : tool
 })
 
+// ─── Tool movement log ──────────────────────────────────────────
+// A completed job took one tool per required category and returned it at completion. Open jobs
+// only hold the tools they list, so the log agrees with each tool's live status.
+
+const toolsByCategory = new Map<string, Tool[]>()
+for (const t of tools) {
+  const key = `${t.siteId}|${t.category}`
+  toolsByCategory.set(key, [...(toolsByCategory.get(key) ?? []), t])
+}
+const toolById = new Map(tools.map((t) => [t.id, t]))
+const toolMovements: ToolMovement[] = []
+const movement = (tool: Tool, kind: ToolMovementKind, at: string, wo: WorkOrder, condition: ToolCondition | null): ToolMovement => ({
+  id: `tm-${pad(toolMovements.length + 1, 5)}`,
+  toolId: tool.id,
+  kind,
+  at,
+  by: wo.assigneeIds[0] ?? wo.requestedBy,
+  holderId: wo.assigneeIds[0] ?? null,
+  woId: wo.id,
+  condition,
+  note: '',
+})
+workOrders.forEach((wo, i) => {
+  if (!wo.startedAt || !wo.assigneeIds.length) return
+  const taken = wo.completedAt
+    ? wo.requiredTools.map((category, j) => {
+        const list = toolsByCategory.get(`${wo.siteId}|${category}`) ?? []
+        return list[(i + j) % list.length]
+      })
+    : wo.toolIds.map((id) => toolById.get(id))
+  for (const tool of taken) {
+    if (!tool) continue
+    toolMovements.push(movement(tool, 'checkout', wo.startedAt, wo, null))
+    if (wo.completedAt) toolMovements.push(movement(tool, 'checkin', wo.completedAt, wo, 'good'))
+  }
+})
+toolMovements.sort((a, b) => a.at.localeCompare(b.at) || a.id.localeCompare(b.id))
+
+// Asset types start a new asset at the typical scores of the assets they already have.
+const typedAssetTypes: AssetType[] = assetTypes.map((t) => {
+  const scored = assets.filter((a) => a.typeId === t.id)
+  const mean = (key: keyof CriticalityScores) => Math.round(scored.reduce((sum, a) => sum + a.scores[key], 0) / scored.length)
+  const defaultScores = scored.length
+    ? { production: mean('production'), safety: mean('safety'), quality: mean('quality'), replacementCost: mean('replacementCost'), redundancy: mean('redundancy') }
+    : null
+  return { ...t, defaultScores }
+})
+
 // ─── Stock ledger ───────────────────────────────────────────────
 
 const partById = new Map(parts.map((p) => [p.id, p]))
@@ -279,7 +339,7 @@ const files: Record<string, unknown> = {
   skills,
   people,
   vendors,
-  'asset-types': assetTypes,
+  'asset-types': typedAssetTypes,
   assets: liveAssets,
   meters,
   'meter-readings': meterReadings,
@@ -297,6 +357,7 @@ const files: Record<string, unknown> = {
   stock,
   'stock-txns': stockTxns,
   tools: liveTools,
+  'tool-movements': toolMovements,
   calibrations: out.calibrations.sort((a, b) => a.date.localeCompare(b.date)),
   rcas,
   settings,
@@ -313,5 +374,5 @@ console.log(`work orders ${workOrders.length}`, byStatus)
 console.log(`requests ${requests.length}, stock txns ${stockTxns.length}, meter readings ${meterReadings.length}, calibrations ${out.calibrations.length}`)
 console.log(`anchor ${workOrders.find((w) => w.id === woId.get('pol03-today'))?.code} / ${mrCode.get('mr-pol03-today')}`)
 console.log(`negative stock rows: ${stockTxns.filter((t) => t.balance < 0).length}`)
-console.log(`people ${people.length}, assets ${assets.length}, parts ${parts.length}, tools ${tools.length}, job plans ${jobPlans.length}, pm ${pmSchedules.length}`)
+console.log(`people ${people.length}, assets ${assets.length}, parts ${parts.length}, tools ${tools.length}, tool movements ${toolMovements.length}, job plans ${jobPlans.length}, pm ${pmSchedules.length}`)
 console.log(`JSON total ${(total / 1024).toFixed(0)} KB, today ${toIso(startOfDay(NOW))}`)

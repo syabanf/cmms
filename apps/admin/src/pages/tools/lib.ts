@@ -1,6 +1,8 @@
 import { toMs } from '@cmms/fixtures'
-import type { Tool, ToolCondition, WorkOrder } from '@cmms/types'
+import type { Tool, ToolCondition, ToolMovement } from '@cmms/types'
 import { TOOL_CONDITION_LABEL } from '@cmms/types'
+import { toast } from '@cmms/ui'
+import type { Scoped } from '../../state/scoped'
 
 const CONDITIONS: ToolCondition[] = ['good', 'fair', 'poor']
 const CONDITION_TONE = { good: 'success', fair: 'warning', poor: 'danger' } as const
@@ -13,38 +15,61 @@ export const asCondition = (value: string): ToolCondition => CONDITIONS.find((c)
 export const distinct = (values: readonly string[]) =>
   [...new Set(values.map((v) => v.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b))
 
+/** One check-out of a tool and, once logged, its return. */
 export interface ToolUse {
-  wo: WorkOrder
-  /** Checkout time. Checkouts made before the log fall back to the work order start. */
-  from: number | null
-  /** Return time. Null while the tool is out, or when a cancelled work order released it. */
+  /** Id of the check-out movement. */
+  id: string
+  holderId: string | null
+  /** Null for general use without a work order. */
+  woId: string | null
+  from: number
+  /** Null while the tool is out, or when the next check-out came before any return. */
   to: number | null
+  /** Condition noted on return. Null while out, or when a work order released the tool. */
+  condition: ToolCondition | null
+  note: string
+  /** The open check-out of a tool that is out right now. */
   current: boolean
 }
 
 /**
- * Work orders that used the tool, current first, then newest. Built from the check-out and
- * return events on each work order plus the tool's current checkout. Completing a work order
- * releases its tools without an event, so its completion time closes the use.
+ * The tool's movement log paired into uses, newest first. Each check-out opens a use; a return
+ * closes the open check-out for its work order (the same person can hold a tool for two jobs at
+ * once), or the latest one when it names none. A second check-out for a work order that already
+ * holds the tool replaces the open one instead of starting a second use.
  */
-export function toolUses(tool: Tool, workOrders: readonly WorkOrder[]): ToolUse[] {
-  const out = `Checked out ${tool.code} `
-  const back = `Returned ${tool.code}`
+export function toolUses(tool: Tool, movements: readonly ToolMovement[]): ToolUse[] {
+  // Entries logged at the same time keep their log order.
+  const own = movements.filter((m) => m.toolId === tool.id).sort((a, b) => toMs(a.at) - toMs(b.at))
+  const use = (out: ToolMovement, back: ToolMovement | null): ToolUse => ({
+    id: out.id,
+    holderId: out.holderId,
+    woId: out.woId,
+    from: toMs(out.at),
+    to: back ? toMs(back.at) : null,
+    condition: back?.condition ?? null,
+    note: back?.note ?? '',
+    current: false,
+  })
   const uses: ToolUse[] = []
-  for (const wo of workOrders) {
-    const current = tool.status === 'in_use' && tool.woId === wo.id
-    const started = wo.startedAt ? toMs(wo.startedAt) : null
-    let open: number | null = null
-    for (const e of wo.events) {
-      if (e.kind !== 'tool') continue
-      if (e.text.startsWith(out)) open = toMs(e.at)
-      else if (e.text === back) {
-        uses.push({ wo, from: open ?? started, to: toMs(e.at), current: false })
-        open = null
-      }
+  const open: ToolMovement[] = []
+  for (const m of own) {
+    let i = open.length - 1
+    while (i >= 0 && open[i]?.woId !== m.woId) i--
+    if (m.kind === 'checkout') {
+      if (i === -1) open.push(m)
+      else open[i] = m
+      continue
     }
-    if (open !== null) uses.push({ wo, from: open, to: current ? null : wo.completedAt ? toMs(wo.completedAt) : null, current })
-    else if (current) uses.push({ wo, from: started, to: null, current: true })
+    const [out] = open.splice(i === -1 ? open.length - 1 : i, 1)
+    if (out) uses.push(use(out, m))
   }
-  return uses.sort((a, b) => Number(b.current) - Number(a.current) || (b.from ?? 0) - (a.from ?? 0))
+  for (const out of open) uses.push({ ...use(out, null), current: tool.status === 'in_use' })
+  return uses.sort((a, b) => b.from - a.from)
+}
+
+/** Sends a tool out for calibration. Recording the calibration brings it back. */
+export function sendForCalibration(dispatch: Scoped['dispatch'], tool: Pick<Tool, 'id' | 'code'>) {
+  dispatch({ type: 'tools/setStatus', id: tool.id, status: 'calibration' })
+  toast(`${tool.code} sent for calibration`, { tone: 'success', description: 'Record the calibration when it comes back.' })
 }

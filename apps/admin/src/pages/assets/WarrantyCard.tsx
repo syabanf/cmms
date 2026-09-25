@@ -13,10 +13,12 @@ import {
 import type { Asset, WarrantyClaim, WarrantyClaimStatus } from '@cmms/types'
 import { WARRANTY_CLAIM_STATUS_LABEL, WO_TYPE_LABEL } from '@cmms/types'
 import {
+  ActionMenu,
   Badge,
   type BadgeProps,
   Button,
   Combobox,
+  ConfirmDialog,
   Dialog,
   DialogContent,
   DialogDescription,
@@ -29,7 +31,7 @@ import {
   Textarea,
   toast,
 } from '@cmms/ui'
-import { Plus } from 'lucide-react'
+import { Ellipsis, Plus, Trash2 } from 'lucide-react'
 import { type FormEvent, useMemo, useState } from 'react'
 import { Link } from 'react-router'
 import { useAuth } from '../../auth/auth'
@@ -51,6 +53,8 @@ export function WarrantyCard({ asset, now, onEdit }: { asset: Asset; now: number
   const { can } = useAuth()
   const canManage = can('asset.manage')
   const [claiming, setClaiming] = useState(false)
+  // Kept after closing so the dialog text survives its exit animation.
+  const [removing, setRemoving] = useState<{ claim: WarrantyClaim; open: boolean } | null>(null)
   const warranty = asset.warranty
   const status = warrantyStatus(warranty, now)
   const claims = useMemo(
@@ -130,7 +134,28 @@ export function WarrantyCard({ asset, now, onEdit }: { asset: Asset; now: number
                     <Badge variant={CLAIM_VARIANT[claim.status]}>
                       {WARRANTY_CLAIM_STATUS_LABEL[claim.status]}
                     </Badge>
-                    <span className="text-sm font-semibold tabular-nums">{fmtIdr(claim.amount)}</span>
+                    <span className="flex items-center gap-1">
+                      <span className="text-sm font-semibold tabular-nums">{fmtIdr(claim.amount)}</span>
+                      {canManage && (
+                        <ActionMenu
+                          title={`${fmtIdr(claim.amount)} claim`}
+                          trigger={
+                            <Button variant="ghost" size="icon-sm" aria-label={`Actions for the ${fmtIdr(claim.amount)} claim`}>
+                              <Ellipsis />
+                            </Button>
+                          }
+                          items={[
+                            {
+                              key: 'delete',
+                              label: 'Delete claim',
+                              icon: <Trash2 />,
+                              destructive: true,
+                              onSelect: () => setRemoving({ claim, open: true }),
+                            },
+                          ]}
+                        />
+                      )}
+                    </span>
                   </div>
                   <p className="mt-2 text-sm">{claim.description}</p>
                   <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted">
@@ -162,6 +187,23 @@ export function WarrantyCard({ asset, now, onEdit }: { asset: Asset; now: number
           {claiming && <ClaimForm asset={asset} onDone={() => setClaiming(false)} />}
         </DialogContent>
       </Dialog>
+      <ConfirmDialog
+        open={!!removing?.open}
+        onOpenChange={(open) => setRemoving((r) => r && { ...r, open })}
+        destructive
+        confirmLabel="Delete claim"
+        title="Delete this claim?"
+        description={
+          removing
+            ? `The ${fmtIdr(removing.claim.amount)} claim from ${fmtDate(removing.claim.date)} leaves the warranty history of ${asset.code}.`
+            : undefined
+        }
+        onConfirm={() => {
+          if (!removing) return
+          dispatch({ type: 'warrantyClaims/remove', id: removing.claim.id })
+          toast('Warranty claim deleted', { tone: 'success', description: `${fmtIdr(removing.claim.amount)} on ${asset.code}` })
+        }}
+      />
     </SideCard>
   )
 }

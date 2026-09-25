@@ -19,7 +19,7 @@ export function PhoneNav({ moreOpen, onMoreChange }: { moreOpen: boolean; onMore
 
   return (
     <>
-      <BottomBar>
+      <BottomBar className="print:hidden">
         <BottomBarItem asChild icon={<House />} label="Home" active={is('/')}>
           <Link to="/" />
         </BottomBarItem>

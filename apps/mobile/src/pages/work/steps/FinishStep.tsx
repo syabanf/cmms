@@ -21,11 +21,12 @@ function recorded(t: WoTask): string {
 
 /** Summary, signature and hand-over. A finished order shows the same summary read-only. */
 export function FinishStep({ wo, nav, access, onCompleted }: StepProps & { onCompleted: () => void }) {
-  const { dispatch, maps } = useMobileScope()
+  const { dispatch, maps, requests } = useMobileScope()
   const now = useNow()
   const [signature, setSignature] = useState<string | null>(null)
   const finished = DONE_WO_STATUSES.includes(wo.status)
   const flagged = wo.tasks.filter(isFlagged)
+  const raised = requests.find((r) => r.inspectionWoId === wo.id)
   const used = wo.parts.filter((l) => l.status === 'consumed')
   const photos =
     wo.attachments.filter((a) => a.kind === 'photo').length +
@@ -54,7 +55,11 @@ export function FinishStep({ wo, nav, access, onCompleted }: StepProps & { onCom
           <CardHeader>
             <CardTitle>Flagged readings</CardTitle>
             <CardDescription>
-              {wo.type === 'inspection' ? 'Completing this inspection creates a follow-up request for them.' : 'Your supervisor sees them in the review.'}
+              {!finished
+                ? 'Completing the work raises a follow-up request for them.'
+                : raised
+                  ? `${raised.code} was raised for them.`
+                  : 'Your supervisor sees them in the review.'}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">

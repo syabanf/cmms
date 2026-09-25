@@ -1,6 +1,7 @@
 import { fmtWhen, newId, nowIso } from '@cmms/fixtures'
 import type { WoEventKind, WorkOrder } from '@cmms/types'
-import { Button, Card, CardContent, CardHeader, CardTitle, Textarea, cn } from '@cmms/ui'
+import { ATTACHMENT_STAGE_LABEL } from '@cmms/types'
+import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Textarea, cn } from '@cmms/ui'
 import type { LucideIcon } from 'lucide-react'
 import {
   BadgeCheck,
@@ -64,6 +65,7 @@ export function ActivityCard({ wo }: { wo: WorkOrder }) {
             variant="soft"
             className="min-h-11 flex-1"
             rows={2}
+            aria-label="Note for the team"
             placeholder="Add a note for the team"
             value={comment}
             onChange={(e) => setComment(e.target.value)}
@@ -121,6 +123,7 @@ export function AttachmentsCard({ wo, canAdd }: { wo: WorkOrder; canAdd: boolean
           kind: file.type.startsWith('image/') ? 'photo' : file.type.startsWith('video/') ? 'video' : 'document',
           name: file.name,
           url: URL.createObjectURL(file),
+          stage: null,
           at: nowIso(),
           by: user.id,
         },
@@ -149,7 +152,12 @@ export function AttachmentsCard({ wo, canAdd }: { wo: WorkOrder; canAdd: boolean
       {wo.attachments.length > 0 && (
         <CardContent className="grid grid-cols-3 gap-2 sm:grid-cols-4">
           {wo.attachments.map((a) => (
-            <figure key={a.id} className="overflow-hidden rounded-2xl bg-surface">
+            <figure key={a.id} className="relative overflow-hidden rounded-2xl bg-surface">
+              {a.stage && (
+                <Badge variant="ink" className="absolute left-1.5 top-1.5">
+                  {ATTACHMENT_STAGE_LABEL[a.stage]}
+                </Badge>
+              )}
               {a.url && a.kind === 'photo' ? (
                 <img src={a.url} alt={a.name} className="aspect-square w-full object-cover" />
               ) : (

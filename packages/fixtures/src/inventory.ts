@@ -53,10 +53,11 @@ export function calibrationState(plan: CalibrationPlan | null, now = nowMs()): C
 
 export const calibrationDaysLeft = (plan: CalibrationPlan, now = nowMs()) => Math.ceil((toMs(plan.due) - now) / DAY)
 
-/** A tool can go on a work order when it is not lost or in repair and its calibration is current. */
+/** A tool can go on a work order when it is on site, not in repair, and its calibration is current. */
 export function toolBlockReason(tool: Tool, now = nowMs()): string | null {
   if (tool.status === 'lost') return 'Missing'
   if (tool.status === 'maintenance') return 'In repair'
+  if (tool.status === 'calibration') return 'Out for calibration'
   if (calibrationState(tool.calibration, now) === 'expired') return 'Calibration expired'
   return null
 }

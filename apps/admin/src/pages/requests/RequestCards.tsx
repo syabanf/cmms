@@ -1,5 +1,5 @@
 import { MINUTE, failureEvents, fmtDate, fmtDateTime, fmtDuration, isActive, plural, recentFailures, toMs } from '@cmms/fixtures'
-import type { Asset, Attachment, AttachmentKind, MaintenanceRequest, RequestStatus } from '@cmms/types'
+import type { Asset, Attachment, AttachmentKind, MaintenanceRequest, RequestStatus, WoType } from '@cmms/types'
 import { IMPACT_LABEL, PRIORITY_LABEL, SEVERITY_LABEL, WO_TYPE_LABEL } from '@cmms/types'
 import { Banner, Card, CardContent, CardDescription, CardHeader, CardTitle, IconTile, Kicker, type Tone } from '@cmms/ui'
 import type { LucideIcon } from 'lucide-react'
@@ -74,15 +74,26 @@ const DECISION: Record<RequestStatus, { verb: string; icon: LucideIcon; tone: To
   duplicate: { verb: 'Marked as duplicate', icon: Copy, tone: 'default' },
 }
 
-/** Where the request came from and every triage decision on it. */
+/** How the work order that raised a request reads in the trail, by its type. Matches the follow-up titles. */
+const ORIGIN: Record<WoType, string> = {
+  inspection: 'Raised by an inspection',
+  preventive: 'Raised by a PM check',
+  calibration: 'Raised by a calibration check',
+  corrective: 'Raised by a post-repair check',
+  emergency: 'Raised by a post-repair check',
+  improvement: 'Raised by a post-work check',
+}
+
+/** Where the request came from and every triage decision on it, oldest first. */
 export function TriageCard({ request: r, now }: { request: MaintenanceRequest; now: number }) {
   const { maps, requests, personName } = useScoped()
-  const inspection = r.inspectionWoId ? maps.workOrder.get(r.inspectionWoId) : undefined
+  const origin = r.inspectionWoId ? maps.workOrder.get(r.inspectionWoId) : undefined
   const workOrder = r.woId ? maps.workOrder.get(r.woId) : undefined
   const original = r.duplicateOfId ? maps.request.get(r.duplicateOfId) : undefined
   const duplicates = requests.filter((x) => x.duplicateOfId === r.id)
-  const decision = r.triagedBy && r.triagedAt ? { ...DECISION[r.status], by: r.triagedBy, at: r.triagedAt } : null
   const minutes = triageMinutes(r)
+  // Only the latest decision still points at a work order or an original request.
+  const latest = r.events.at(-1)
 
   return (
     <Card>
@@ -92,27 +103,36 @@ export function TriageCard({ request: r, now }: { request: MaintenanceRequest; n
       </CardHeader>
       <CardContent>
         <ol className="space-y-5">
-          {inspection && (
-            <TrailItem icon={<ClipboardCheck />} tone="info" title="Raised by an inspection" meta={`Flagged on ${fmtDateTime(r.reportedAt)}`}>
-              <LinkedRow to={paths.workOrder(inspection.id)} code={inspection.code} title={inspection.title} badge={<WoStatusBadge status={inspection.status} />} />
-            </TrailItem>
-          )}
-          {decision && (
+          {r.inspectionWoId && (
             <TrailItem
-              icon={<decision.icon />}
-              tone={decision.tone}
-              title={`${decision.verb} by ${personName(decision.by)}`}
-              meta={`${fmtDateTime(decision.at)}${minutes === null ? '' : ` · ${fmtDuration(minutes)} after the report`}`}
+              icon={<ClipboardCheck />}
+              tone="info"
+              title={origin ? ORIGIN[origin.type] : 'Raised by a checklist result'}
+              meta={`Flagged on ${fmtDateTime(r.reportedAt)}`}
             >
-              {r.triageNote && <p className="rounded-2xl bg-surface-2 px-3 py-2 text-sm">{r.triageNote}</p>}
-              {workOrder && (
-                <LinkedRow to={paths.workOrder(workOrder.id)} code={workOrder.code} title={workOrder.title} badge={<WoStatusBadge status={workOrder.status} />} />
-              )}
-              {original && (
-                <LinkedRow to={paths.request(original.id)} code={original.code} title={original.title} badge={<RequestStatusBadge status={original.status} />} />
-              )}
+              {origin && <LinkedRow to={paths.workOrder(origin.id)} code={origin.code} title={origin.title} badge={<WoStatusBadge status={origin.status} />} />}
             </TrailItem>
           )}
+          {r.events.map((e, index) => {
+            const decision = DECISION[e.status]
+            return (
+              <TrailItem
+                key={e.id}
+                icon={<decision.icon />}
+                tone={decision.tone}
+                title={`${decision.verb} by ${personName(e.by)}`}
+                meta={`${fmtDateTime(e.at)}${index === 0 && minutes !== null ? ` · ${fmtDuration(minutes)} after the report` : ''}`}
+              >
+                {e.note && <p className="rounded-2xl bg-surface-2 px-3 py-2 text-sm">{e.note}</p>}
+                {e === latest && e.status === 'converted' && workOrder && (
+                  <LinkedRow to={paths.workOrder(workOrder.id)} code={workOrder.code} title={workOrder.title} badge={<WoStatusBadge status={workOrder.status} />} />
+                )}
+                {e === latest && e.status === 'duplicate' && original && (
+                  <LinkedRow to={paths.request(original.id)} code={original.code} title={original.title} badge={<RequestStatusBadge status={original.status} />} />
+                )}
+              </TrailItem>
+            )
+          })}
           {r.status === 'new' && (
             <TrailItem icon={<Hourglass />} tone="danger" title="Waiting for triage" meta={`In the queue for ${fmtDuration((now - toMs(r.reportedAt)) / MINUTE)}`} />
           )}

@@ -1,6 +1,7 @@
 import type { PmDue, PmState } from '@cmms/fixtures'
-import { DAY, fmtNumber, startOfDay, toMs } from '@cmms/fixtures'
+import { DAY, UNSTARTED_WO_STATUSES, fmtNumber, startOfDay, toMs } from '@cmms/fixtures'
 import type { CapaAction, Meter, PmSchedule, Rca, WorkOrder } from '@cmms/types'
+import { WO_STATUS_LABEL } from '@cmms/types'
 
 export const PM_STATES: PmState[] = ['overdue', 'due', 'due_soon', 'scheduled']
 
@@ -29,6 +30,25 @@ export function meterLeftText(due: PmDue, meter: Meter | undefined): string | nu
 }
 
 export const triggerMeterId = (pm: PmSchedule) => (pm.trigger.kind === 'calendar' ? null : pm.trigger.meterId)
+
+/** Statuses the store cancels along with a deleted schedule; started work keeps running. */
+
+/** Copy for the delete confirmation and its toast: what happens to the schedule's open work order. */
+export function deleteEffect(pm: PmSchedule, openWo: WorkOrder | undefined): { description: string; toast: string | undefined } {
+  if (!openWo) {
+    return { description: `${pm.name} generates no new work. Work orders it created keep their history.`, toast: undefined }
+  }
+  if (UNSTARTED_WO_STATUSES.includes(openWo.status)) {
+    return {
+      description: `${openWo.code} has not started, so it is cancelled with the schedule. Finished work orders keep their history.`,
+      toast: `${openWo.code} cancelled.`,
+    }
+  }
+  return {
+    description: `${openWo.code} is ${WO_STATUS_LABEL[openWo.status].toLowerCase()} and keeps running. ${pm.name} generates no new work.`,
+    toast: `${openWo.code} keeps running.`,
+  }
+}
 
 export interface CapaHint {
   rca: Rca

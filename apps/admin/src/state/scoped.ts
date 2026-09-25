@@ -81,6 +81,7 @@ export function useScoped() {
       warrantyClaims: state.warrantyClaims.filter((c) => assetIds.has(c.assetId)),
       stock: state.stock.filter((s) => warehouseIds.includes(s.warehouseId)),
       stockTxns: state.stockTxns.filter((t) => warehouseIds.includes(t.warehouseId)),
+      toolMovements: state.toolMovements.filter((m) => toolIds.has(m.toolId)),
       calibrations: state.calibrations.filter((c) => (c.target.kind === 'asset' ? assetIds.has(c.target.id) : toolIds.has(c.target.id))),
       // master data shared by every site
       parts: state.parts,

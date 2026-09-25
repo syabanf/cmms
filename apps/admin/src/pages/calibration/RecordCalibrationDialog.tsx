@@ -45,6 +45,8 @@ function RecordForm({ target, onDone }: { target: CalTarget; onDone: () => void 
   const today = dayKey(nowMs())
   const interval = target.plan.intervalMonths
   const vendorName = (id: string | null) => (id ? (maps.vendor.get(id)?.name ?? '') : user.name)
+  // A tool at calibration comes back to the crib when its record is saved.
+  const away = target.kind === 'tool' && target.status === 'calibration'
 
   const [date, setDate] = useState(today)
   const [result, setResult] = useState<CalibrationResult>('pass')
@@ -96,7 +98,7 @@ function RecordForm({ target, onDone }: { target: CalTarget; onDone: () => void 
       tone: result === 'fail' ? 'danger' : 'success',
       description:
         result !== 'fail'
-          ? `Next due ${fmtDate(due)}`
+          ? `${away ? 'Back from calibration. ' : ''}Next due ${fmtDate(due)}`
           : target.kind === 'tool'
             ? 'It failed, so the tool went to repair.'
             : 'It failed, so it stays expired until a calibration passes.',
@@ -121,6 +123,7 @@ function RecordForm({ target, onDone }: { target: CalTarget; onDone: () => void 
         <DialogTitle>Record calibration</DialogTitle>
         <DialogDescription>
           {target.code} · {target.name}. Calibrated every {plural(interval, 'month')}.
+          {away && ' It is out for calibration now, and saving this record brings it back.'}
         </DialogDescription>
       </DialogHeader>
 

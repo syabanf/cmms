@@ -2,7 +2,7 @@ import type { ComponentProps } from 'react'
 import { X } from 'lucide-react'
 import { Dialog as DialogPrimitive } from 'radix-ui'
 import { cn } from '../lib/cn'
-import { closeButtonClass, overlayClass } from '../lib/overlay'
+import { closeButtonClass, overlayClass, useReturnFocus } from '../lib/overlay'
 
 export const Sheet = DialogPrimitive.Root
 export const SheetTrigger = DialogPrimitive.Trigger
@@ -32,13 +32,17 @@ export function SheetContent({
   hideClose = false,
   className,
   children,
+  onOpenAutoFocus,
+  onCloseAutoFocus,
   ...props
 }: SheetContentProps) {
   const dark = tone === 'dark'
+  const focus = useReturnFocus({ onOpenAutoFocus, onCloseAutoFocus })
   return (
     <DialogPrimitive.Portal>
       <DialogPrimitive.Overlay className={overlayClass} />
       <DialogPrimitive.Content
+        {...focus}
         className={cn(
           'fixed z-50 shadow-float outline-none duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out',
           dark ? 'bg-ink text-on-ink' : 'bg-card text-foreground',

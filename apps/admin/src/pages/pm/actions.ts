@@ -4,6 +4,7 @@ import { toast } from '@cmms/ui'
 import { useNavigate } from 'react-router'
 import { paths } from '../../components/links'
 import { useScoped } from '../../state/scoped'
+import { deleteEffect } from './lib'
 
 /** PM schedule actions shared by the list, the detail page and the calendar forecast. */
 export function usePmActions() {
@@ -51,9 +52,9 @@ export function usePmActions() {
   }
 
   const remove = (pm: PmSchedule) => {
-    const open = openPmWorkOrder(pm, workOrders)
+    const effect = deleteEffect(pm, openPmWorkOrder(pm, workOrders))
     dispatch({ type: 'pm/remove', id: pm.id })
-    toast(`${pm.code} deleted`, { tone: 'success', description: open ? `${open.code} stays open in the backlog.` : undefined })
+    toast(`${pm.code} deleted`, { tone: 'success', description: effect.toast })
   }
 
   return { blockReason, generate, setActive, remove }

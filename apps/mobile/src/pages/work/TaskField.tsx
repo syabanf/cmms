@@ -21,7 +21,7 @@ const PASS_FAIL: SegmentedOption[] = [
 ]
 
 /** One checklist line, rendered by field type. Results save through workOrders/recordTask. */
-export function TaskField({ woId, task, editable, inspection }: { woId: string; task: WoTask; editable: boolean; inspection: boolean }) {
+export function TaskField({ woId, task, editable }: { woId: string; task: WoTask; editable: boolean }) {
   const { dispatch, user, personName } = useMobileScope()
   const result = task.result
 
@@ -75,7 +75,7 @@ export function TaskField({ woId, task, editable, inspection }: { woId: string; 
     }
     case 'measurement':
     case 'number':
-      control = <ReadingInput task={task} editable={editable} inspection={inspection} onCommit={record} />
+      control = <ReadingInput task={task} editable={editable} onCommit={record} />
       break
     case 'text':
       control = <NoteInput task={task} editable={editable} onCommit={record} />
@@ -117,37 +117,23 @@ export function TaskField({ woId, task, editable, inspection }: { woId: string; 
       <p className="text-sm font-semibold">{label}</p>
       {task.help && <p className="mt-0.5 text-xs text-muted">{task.help}</p>}
       <div className="mt-3">{control}</div>
-      {(task.type === 'passfail' || task.type === 'choice') && <FlagNote outcome={result?.outcome ?? null} inspection={inspection} />}
+      {(task.type === 'passfail' || task.type === 'choice') && <FlagNote outcome={result?.outcome ?? null} />}
       {recorded && <p className="mt-2 text-[11px] text-muted">Recorded by {recorded}</p>}
     </div>
   )
 }
 
-/**
- * What a flagged result means. The reducer raises a follow-up request only when an inspection
- * completes with a warning or fail; on other work the technician fixes it or writes it up.
- */
-function FlagNote({ outcome, inspection }: { outcome: CheckOutcome | null; inspection: boolean }) {
+/** What a flagged result means. Completing any work order with a warning or failed line raises a follow-up request. */
+function FlagNote({ outcome }: { outcome: CheckOutcome | null }) {
   if (outcome !== 'warning' && outcome !== 'fail') return null
   return (
     <p className={cn('mt-2 text-xs font-semibold', outcome === 'fail' ? 'text-accent' : 'text-warning')}>
-      {outcome === 'fail' ? 'Out of limit.' : 'Close to the limit.'}{' '}
-      {inspection ? 'Completing this inspection creates a follow-up request.' : 'Fix it now, or describe it under Findings for the supervisor.'}
+      {outcome === 'fail' ? 'Out of limit.' : 'Close to the limit.'} Completing the work raises a follow-up request for it.
     </p>
   )
 }
 
-function ReadingInput({
-  task,
-  editable,
-  inspection,
-  onCommit,
-}: {
-  task: WoTask
-  editable: boolean
-  inspection: boolean
-  onCommit: (value: number | null) => void
-}) {
+function ReadingInput({ task, editable, onCommit }: { task: WoTask; editable: boolean; onCommit: (value: number | null) => void }) {
   const stored = typeof task.result?.value === 'number' ? String(task.result.value) : ''
   const [draft, setDraft] = useDraft(stored)
   const value = parseReading(draft)
@@ -187,7 +173,7 @@ function ReadingInput({
       <p className={cn('mt-1.5 text-xs', invalid ? 'text-danger' : 'text-muted')}>
         {invalid ? 'Enter a number, for example 4.2' : help || 'Type the reading'}
       </p>
-      <FlagNote outcome={outcome} inspection={inspection} />
+      <FlagNote outcome={outcome} />
     </div>
   )
 }

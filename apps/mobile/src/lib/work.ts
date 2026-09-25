@@ -50,7 +50,8 @@ export function matchesType(wo: WorkOrder, filter: TypeFilter): boolean {
 }
 
 /** Any lock-out, PPE or hazard on the job makes safety a gate before the work starts. */
-export const needsSafety = (wo: WorkOrder) => wo.safety.loto || wo.safety.ppeIds.length > 0 || wo.safety.hazardIds.length > 0
+export const needsSafety = (wo: WorkOrder) =>
+  wo.safety.loto || wo.safety.lotoIds.length > 0 || wo.safety.permitIds.length > 0 || wo.safety.ppeIds.length > 0 || wo.safety.hazardIds.length > 0
 
 /** The job has a safety gate that nobody has confirmed yet. */
 export const safetyPending = (wo: WorkOrder) => needsSafety(wo) && !wo.safety.confirmedBy

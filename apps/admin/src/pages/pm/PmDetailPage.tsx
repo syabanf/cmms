@@ -46,7 +46,7 @@ import { useTableHistory } from '../../lib/history-state'
 import { useNow, useScoped } from '../../state/scoped'
 import { usePmActions } from './actions'
 import { PmResultBadge, PmStateBadge } from './badges'
-import { capaHints, dueRelative, meterLeftText, pmResult, triggerMeterId } from './lib'
+import { capaHints, deleteEffect, dueRelative, meterLeftText, pmResult, triggerMeterId } from './lib'
 import { PmDialog } from './PmDialog'
 
 export function PmDetailPage() {
@@ -130,6 +130,14 @@ function PmView({ pm }: { pm: PmSchedule }) {
 
   const late = pm.active && due.state === 'overdue'
   const left = meterLeftText(due, meter)
+  const generateAt = due.dueAt - pm.leadDays * DAY
+  const schedulerNote = !pm.active
+    ? ''
+    : reason
+      ? ` The scheduler cannot create one: ${reason.charAt(0).toLowerCase()}${reason.slice(1)}.`
+      : generateAt > now
+        ? ` The scheduler creates one on ${fmtDate(generateAt)}.`
+        : ''
 
   return (
     <>
@@ -253,7 +261,7 @@ function PmView({ pm }: { pm: PmSchedule }) {
               ) : (
                 <p className="text-sm text-muted">
                   No work order is open.
-                  {pm.active && pm.leadDays > 0 ? ` With ${plural(pm.leadDays, 'day')} lead time, generate it from ${fmtDate(due.dueAt - pm.leadDays * DAY)}.` : ''}
+                  {schedulerNote}
                 </p>
               )}
 
@@ -308,6 +316,9 @@ function PmView({ pm }: { pm: PmSchedule }) {
           <Card>
             <CardHeader>
               <CardTitle>Schedule</CardTitle>
+              <CardDescription>
+                Work orders generate automatically {pm.leadDays > 0 ? `${plural(pm.leadDays, 'day')} before each due date` : 'on each due date'}.
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <KeyValue
@@ -382,11 +393,7 @@ function PmView({ pm }: { pm: PmSchedule }) {
         destructive
         confirmLabel="Delete schedule"
         title={`Delete ${pm.code}?`}
-        description={
-          openWo
-            ? `${openWo.code} is still open and stays in the backlog, but ${pm.name} generates no new work.`
-            : `${pm.name} generates no new work. Work orders it created keep their history.`
-        }
+        description={deleteEffect(pm, openWo).description}
         onConfirm={() => {
           remove(pm)
           navigate('/preventive/pm')

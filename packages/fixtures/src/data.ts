@@ -24,6 +24,7 @@ import skills from '../data/skills.json'
 import stockTxns from '../data/stock-txns.json'
 import stock from '../data/stock.json'
 import teams from '../data/teams.json'
+import toolMovements from '../data/tool-movements.json'
 import tools from '../data/tools.json'
 import vendors from '../data/vendors.json'
 import warehouses from '../data/warehouses.json'
@@ -57,6 +58,7 @@ const seed = {
   stock,
   stockTxns,
   tools,
+  toolMovements,
   calibrations,
   rcas,
   settings,

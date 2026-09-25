@@ -1,4 +1,4 @@
-import { calibrationDaysLeft, calibrationState, fmtDate, fmtDateTime, plural, toMs } from '@cmms/fixtures'
+import { calibrationDaysLeft, calibrationState, fmtDate, fmtDateTime, fmtTime, plural, toMs } from '@cmms/fixtures'
 import type { CalibrationRecord, Tool } from '@cmms/types'
 import { CALIBRATION_RESULT_LABEL, TOOL_CONDITION_LABEL } from '@cmms/types'
 import {
@@ -20,15 +20,19 @@ import {
 import { ClipboardList, FileCheck2, Gauge, MapPin, Wrench } from 'lucide-react'
 import { Link } from 'react-router'
 import { CalibrationBadge } from '../../components/badges'
-import { AssetLink, WoLink, paths } from '../../components/links'
+import { AssetLink, PersonChip, WoLink, paths } from '../../components/links'
 import { useScoped } from '../../state/scoped'
 import { daysLeftText } from '../calibration/lib'
 import type { ToolUse } from './lib'
 
+/** Why a tool that is neither on the shelf nor in use cannot go out. */
 const STATUS_NOTE = {
+  calibration: 'Out for calibration. Saving its calibration record brings it back.',
   maintenance: 'In repair. Work orders cannot use it until someone marks it available.',
   lost: 'Marked missing. Nobody can check it out until it turns up.',
 } as const
+/** Tile tone matching the status badge. */
+const STATUS_TONE = { calibration: 'info', maintenance: 'warning', lost: 'danger' } as const
 
 /** Who holds the tool and for which job, or where it waits. `blocked` is the reason it cannot go out. */
 export function CurrentUseCard({ tool, use, blocked }: { tool: Tool; use: ToolUse | undefined; blocked: string | null }) {
@@ -44,7 +48,7 @@ export function CurrentUseCard({ tool, use, blocked }: { tool: Tool; use: ToolUs
           <CardTitle>Current use</CardTitle>
         </CardHeader>
         <CardContent className="flex items-start gap-3">
-          <IconTile tone={tool.status === 'available' ? 'default' : tool.status === 'lost' ? 'danger' : 'warning'}>
+          <IconTile tone={tool.status === 'available' ? 'default' : STATUS_TONE[tool.status]}>
             <MapPin />
           </IconTile>
           <div className="min-w-0">
@@ -60,7 +64,7 @@ export function CurrentUseCard({ tool, use, blocked }: { tool: Tool; use: ToolUs
     <Card>
       <CardHeader>
         <CardTitle>Current use</CardTitle>
-        <CardDescription>{use?.from ? `Out since ${fmtDateTime(use.from)}` : 'Checked out'}</CardDescription>
+        <CardDescription>{use ? `Out since ${fmtDateTime(use.from)}` : 'Checked out'}</CardDescription>
       </CardHeader>
       <CardContent className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div className="flex items-center gap-3 rounded-2xl bg-surface-2 p-3">
@@ -100,29 +104,56 @@ export function CurrentUseCard({ tool, use, blocked }: { tool: Tool; use: ToolUs
   )
 }
 
+/** Date over time, so a timestamp column stays narrow. */
+function When({ at }: { at: number }) {
+  return (
+    <div className="whitespace-nowrap tabular-nums">
+      <p>{fmtDate(at)}</p>
+      <p className="text-[11px] text-muted">{fmtTime(at)}</p>
+    </div>
+  )
+}
+
 export function UsesCard({ uses, onCheckout }: { uses: ToolUse[]; onCheckout?: () => void }) {
+  const { maps } = useScoped()
+  const workOrder = (u: ToolUse) => (u.woId ? maps.workOrder.get(u.woId) : undefined)
   const columns: Column<ToolUse>[] = [
     {
-      id: 'wo',
-      header: 'Work order',
+      id: 'holder',
+      header: 'Taken by',
       cell: (u) => (
-        <div className="min-w-0 max-w-[18rem]">
-          <WoLink woId={u.wo.id} />
-          <p className="truncate text-sm">{u.wo.title}</p>
+        <div className="min-w-0 max-w-[12rem]">
+          <PersonChip personId={u.holderId} />
           <p className="mt-1 text-[11px] text-muted sm:hidden">
-            {u.from ? fmtDateTime(u.from) : 'Start not recorded'}
+            {workOrder(u)?.code ?? 'General use'} · {fmtDateTime(u.from)}
             {u.current ? ', still out' : u.to ? ` to ${fmtDateTime(u.to)}` : ''}
+            {u.condition ? `, back in ${TOOL_CONDITION_LABEL[u.condition].toLowerCase()} condition` : ''}
           </p>
         </div>
       ),
     },
-    { id: 'asset', header: 'Asset', cell: (u) => <AssetLink assetId={u.wo.assetId} />, hideBelow: 'md' },
+    {
+      id: 'wo',
+      header: 'Work order',
+      cell: (u) => {
+        const wo = workOrder(u)
+        return wo ? (
+          <div className="min-w-0 max-w-[12rem]">
+            <WoLink woId={wo.id} />
+            <p className="truncate text-sm">{wo.title}</p>
+          </div>
+        ) : (
+          <span className="text-muted">General use</span>
+        )
+      },
+      hideBelow: 'sm',
+    },
     {
       id: 'from',
       header: 'Out',
-      cell: (u) => <span className={cn('whitespace-nowrap tabular-nums', !u.from && 'text-muted')}>{u.from ? fmtDateTime(u.from) : 'Not recorded'}</span>,
+      cell: (u) => <When at={u.from} />,
       sortValue: (u) => u.from,
-      hideBelow: 'sm',
+      hideBelow: 'md',
     },
     {
       id: 'to',
@@ -132,10 +163,28 @@ export function UsesCard({ uses, onCheckout }: { uses: ToolUse[]; onCheckout?: (
           <Badge variant="info" dot>
             Still out
           </Badge>
+        ) : u.to ? (
+          <When at={u.to} />
         ) : (
-          <span className={cn('whitespace-nowrap tabular-nums', !u.to && 'text-muted')}>{u.to ? fmtDateTime(u.to) : 'Not recorded'}</span>
+          <span className="text-muted">Not recorded</span>
         ),
+      sortValue: (u) => u.to,
       hideBelow: 'sm',
+    },
+    {
+      id: 'condition',
+      header: 'Condition',
+      cell: (u) => (
+        <div className="max-w-[12rem]">
+          {u.to !== null && <p className={cn(!u.condition && 'text-muted')}>{u.condition ? TOOL_CONDITION_LABEL[u.condition] : 'Not noted'}</p>}
+          {u.note && (
+            <p className="truncate text-[11px] text-muted" title={u.note}>
+              {u.note}
+            </p>
+          )}
+        </div>
+      ),
+      hideBelow: 'lg',
     },
   ]
 
@@ -143,19 +192,19 @@ export function UsesCard({ uses, onCheckout }: { uses: ToolUse[]; onCheckout?: (
     <Card>
       <CardHeader>
         <CardTitle>Checkout history</CardTitle>
-        <CardDescription>Work orders that took this tool, newest first.</CardDescription>
+        <CardDescription>Every check-out and return, newest first.</CardDescription>
       </CardHeader>
       <DataTable
         columns={columns}
         rows={uses}
-        getRowKey={(u) => `${u.wo.id}-${u.from ?? 'start'}`}
+        getRowKey={(u) => u.id}
         pageSize={8}
         empty={
           <EmptyState
             compact
             icon={<ClipboardList />}
-            title="No work order has used it yet"
-            description="Checkouts linked to a work order show here with their out and back times."
+            title="Nobody has checked it out yet"
+            description="Each check-out shows here with who took the tool, the work order and when it came back."
             action={
               onCheckout ? (
                 <Button variant="outline" size="sm" onClick={onCheckout}>
@@ -203,7 +252,7 @@ export function CalibrationRecordsCard({
       hideBelow: 'sm',
     },
     { id: 'certificate', header: 'Certificate', cell: (r) => <span className="font-mono text-xs">{r.certificateNo}</span>, hideBelow: 'sm' },
-    { id: 'by', header: 'Performed by', cell: (r) => <span className="block max-w-[12rem] truncate">{r.performedBy}</span>, hideBelow: 'md' },
+    { id: 'by', header: 'Performed by', cell: (r) => <span className="block max-w-[12rem] truncate">{r.performedBy}</span>, hideBelow: 'lg' },
     { id: 'next', header: 'Next due', cell: (r) => <span className="whitespace-nowrap tabular-nums">{fmtDate(r.nextDue)}</span>, hideBelow: 'md' },
     { id: 'notes', header: 'Notes', cell: (r) => <span className="block max-w-[16rem] truncate text-muted">{r.notes || 'None'}</span>, className: 'hidden 2xl:table-cell', headerClassName: 'hidden 2xl:table-cell' },
   ]

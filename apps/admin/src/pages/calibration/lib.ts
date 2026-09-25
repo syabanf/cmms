@@ -1,19 +1,18 @@
 import { calibrationDaysLeft, calibrationState, isActive, toMs } from '@cmms/fixtures'
-import type { Asset, CalibrationPlan, CalibrationRecord, CalibrationState, JobPlan, Tool, WorkOrder } from '@cmms/types'
+import type { Asset, CalibrationPlan, CalibrationRecord, CalibrationState, JobPlan, Tool, ToolStatus, WorkOrder } from '@cmms/types'
 
 export type CalKind = 'asset' | 'tool'
 export const CAL_KIND_LABEL: Record<CalKind, string> = { asset: 'Instrument', tool: 'Tool' }
 
-/** An instrument asset or a tool that carries a calibration plan. */
-export interface CalTarget {
-  kind: CalKind
-  id: string
-  code: string
-  name: string
-  plan: CalibrationPlan
-}
+type Planned = { id: string; code: string; name: string; plan: CalibrationPlan }
 
-export interface CalRow extends CalTarget {
+/**
+ * An instrument asset or a tool that carries a calibration plan. A tool also says where it is,
+ * since one at calibration comes back when its record is saved.
+ */
+export type CalTarget = (Planned & { kind: 'asset' }) | (Planned & { kind: 'tool'; status: ToolStatus })
+
+export type CalRow = CalTarget & {
   /** Asset type name or tool category. */
   type: string
   state: CalibrationState
@@ -62,7 +61,9 @@ export function calibrationRows({ assets, tools, calibrations, workOrders, typeN
           ]
         : [],
     ),
-    ...tools.flatMap((t) => (t.calibration ? [row({ kind: 'tool', id: t.id, code: t.code, name: t.name, plan: t.calibration }, t.category)] : [])),
+    ...tools.flatMap((t) =>
+      t.calibration ? [row({ kind: 'tool', id: t.id, code: t.code, name: t.name, plan: t.calibration, status: t.status }, t.category)] : [],
+    ),
   ]
 }
 

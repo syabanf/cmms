@@ -8,6 +8,8 @@ import { AssetIcon } from './icons'
 
 type Common = {
   id?: string
+  /** Name for screen readers when no visible label points at the picker (filters, inline rows). */
+  'aria-label'?: string
   placeholder?: string
   clearable?: boolean
   disabled?: boolean

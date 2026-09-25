@@ -45,15 +45,15 @@ export function AdminLayout() {
   return (
     <CreateProvider>
       {/* overflow-clip, not hidden: a hidden box can still be scrolled by focus and scrollIntoView. */}
-      <div className="gap-4 p-3 lg:p-4 relative flex h-dvh overflow-clip bg-surface">
+      <div className="gap-4 p-3 lg:p-4 relative flex h-dvh overflow-clip bg-surface print:block print:h-auto print:overflow-visible print:bg-white print:p-0">
         {/* The glow is clipped by its own box so the shell never gains scrollable overflow. */}
-        <div aria-hidden className="inset-0 pointer-events-none absolute overflow-hidden">
+        <div aria-hidden className="inset-0 pointer-events-none absolute overflow-hidden print:hidden">
           <div
             className="blur-xl absolute -top-[30%] -right-[8%] h-[120%] w-[70%] opacity-70"
             style={{ background: GLOW }}
           />
         </div>
-        <div className="md:block relative hidden shrink-0">
+        <div className="md:block relative hidden shrink-0 print:hidden">
           <SideRail
             expanded={expanded}
             canExpand={isDesktop}
@@ -61,8 +61,16 @@ export function AdminLayout() {
           />
         </div>
         <div className="min-w-0 gap-4 relative flex flex-1 flex-col">
+          <nav aria-label="Skip links">
+            <a
+              href="#main"
+              className="sr-only z-30 rounded-full bg-ink px-4 py-2 text-sm font-semibold text-on-ink shadow-float focus:not-sr-only focus:absolute focus:left-4 focus:top-3"
+            >
+              Skip to content
+            </a>
+          </nav>
           <Header onMenu={() => setMoreOpen(true)} />
-          <main ref={mainRef} className="min-h-0 pb-24 pr-0.5 md:pb-2 relative flex-1 overflow-y-auto">
+          <main id="main" tabIndex={-1} ref={mainRef} className="min-h-0 pb-24 pr-0.5 md:pb-2 relative flex-1 overflow-y-auto print:overflow-visible print:p-0">
             <SectionTabs />
             <Outlet />
           </main>

@@ -48,7 +48,7 @@ import { useHistoryState, useTableHistory } from '../../lib/history-state'
 import { useNow, useScoped } from '../../state/scoped'
 import { usePmActions } from './actions'
 import { PmStateBadge } from './badges'
-import { PM_STATES, PM_STATE_LABEL, capaHints, dueRelative, meterLeftText, triggerMeterId } from './lib'
+import { PM_STATES, PM_STATE_LABEL, capaHints, deleteEffect, dueRelative, meterLeftText, triggerMeterId } from './lib'
 import { PmDialog } from './PmDialog'
 
 type StateFilter = PmState | 'paused'
@@ -314,6 +314,7 @@ export function PmSchedulesPage() {
               type="search"
               className="w-full sm:w-64"
               leftIcon={<Search />}
+              aria-label="Search PM schedules"
               placeholder="Search code, asset or plan"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -474,13 +475,7 @@ export function PmSchedulesPage() {
         destructive
         confirmLabel="Delete schedule"
         title={deleting ? `Delete ${deleting.row.pm.code}?` : ''}
-        description={
-          deleting
-            ? deleting.row.openWo
-              ? `${deleting.row.openWo.code} is still open and stays in the backlog, but ${deleting.row.pm.name} generates no new work.`
-              : `${deleting.row.pm.name} generates no new work. Work orders it created keep their history.`
-            : undefined
-        }
+        description={deleting ? deleteEffect(deleting.row.pm, deleting.row.openWo).description : undefined}
         onConfirm={() => deleting && remove(deleting.row.pm)}
       />
     </>
@@ -529,7 +524,7 @@ function FilterControls({
           </Chip>
         ))}
       </div>
-      <TeamPicker variant="inline" clearable placeholder="All teams" value={filters.teamId} onChange={(teamId) => onChange({ ...filters, teamId })} />
+      <TeamPicker aria-label="Team" variant="inline" clearable placeholder="All teams" value={filters.teamId} onChange={(teamId) => onChange({ ...filters, teamId })} />
     </div>
   )
 }

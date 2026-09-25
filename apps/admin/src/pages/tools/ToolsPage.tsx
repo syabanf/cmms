@@ -13,7 +13,7 @@ import { distinct } from './lib'
 import { ToolCard } from './ToolCard'
 import { ToolDialog } from './ToolDialog'
 
-const STATUSES: ToolStatus[] = ['available', 'in_use', 'maintenance', 'lost']
+const STATUSES: ToolStatus[] = ['available', 'in_use', 'calibration', 'maintenance', 'lost']
 
 export function ToolsPage() {
   const { tools, site, personName } = useScoped()
@@ -29,7 +29,7 @@ export function ToolsPage() {
   const categories = useMemo(() => distinct(tools.map((t) => t.category)), [tools])
   const countOf = (s: ToolStatus) => tools.filter((t) => t.status === s).length
   const expired = tools.filter((t) => calibrationState(t.calibration, now) === 'expired')
-  const out = countOf('maintenance') + countOf('lost')
+  const out = countOf('calibration') + countOf('maintenance') + countOf('lost')
 
   const q = query.trim().toLowerCase()
   const searched = q
@@ -81,7 +81,13 @@ export function ToolsPage() {
           icon={<HardHat />}
           tone="info"
         />
-        <StatCard label="In repair or missing" value={out} hint={`${countOf('maintenance')} in repair, ${countOf('lost')} missing`} icon={<Construction />} tone="warning" />
+        <StatCard
+          label="Out of service"
+          value={out}
+          hint={`${countOf('calibration')} at calibration, ${countOf('maintenance')} in repair, ${countOf('lost')} missing`}
+          icon={<Construction />}
+          tone="warning"
+        />
         <StatCard
           label="Calibration expired"
           value={expired.length}

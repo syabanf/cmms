@@ -299,6 +299,7 @@ function FilterControls({
         })}
       </div>
       <AssetPicker
+        aria-label="Asset"
         variant="inline"
         clearable
         placeholder="All assets"

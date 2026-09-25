@@ -86,7 +86,7 @@ function RequestForm({ onSent }: { onSent: (id: string) => void }) {
         title: draft.title.trim(),
         description: draft.description.trim(),
         reportedAt: at,
-        attachments: photos.map((url, i) => ({ id: newId('att'), kind: 'photo', name: `Photo ${i + 1}.jpg`, url, at, by: user.id })),
+        attachments: photos.map((url, i) => ({ id: newId('att'), kind: 'photo', name: `Photo ${i + 1}.jpg`, url, stage: null, at, by: user.id })),
       },
     })
     toast('Request sent', { tone: 'success', description: 'The supervisor sees it now.' })

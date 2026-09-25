@@ -273,7 +273,14 @@ export const currentWork: WoSpec[] = [
     downtime: true,
     parts: [{ code: 'CHN-RS60', qty: 1, status: 'reserved' }],
     requiredTools: ['Hydraulic jack'],
-    safety: { loto: true, hazardIds: ['sf-entangle', 'sf-rotating'], ppeIds: ['sf-gloves', 'sf-shoes', 'sf-glasses'], notes: 'Lock out the drive and the take-up unit.' },
+    safety: {
+      loto: true,
+      lotoIds: ['sf-elec-iso', 'sf-mech-block'],
+      permitIds: ['sf-loto-auth'],
+      hazardIds: ['sf-entangle', 'sf-rotating'],
+      ppeIds: ['sf-gloves', 'sf-shoes', 'sf-glasses'],
+      notes: 'Lock out the drive and the take-up unit.',
+    },
     tasks: [
       noteCheck('Lock out conveyor drive and take-up'),
       { label: 'Sprocket teeth condition', type: 'passfail', required: true },

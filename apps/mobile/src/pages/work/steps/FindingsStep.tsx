@@ -52,6 +52,7 @@ function NotesCard({ wo, editable }: { wo: WorkOrder; editable: boolean }) {
       <CardContent>
         <Textarea
           variant="soft"
+          aria-label="Work notes"
           value={draft}
           disabled={!editable}
           placeholder="Chain replaced, tension set, test run 10 minutes without noise"

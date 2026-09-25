@@ -4,6 +4,7 @@ import { AVAILABILITY_LABEL, SHIFT_LABEL } from '@cmms/types'
 import {
   Avatar,
   Button,
+  Chip,
   Dialog,
   DialogContent,
   DialogDescription,
@@ -17,10 +18,11 @@ import {
   SegmentedControl,
   cn,
 } from '@cmms/ui'
+import { Plus } from 'lucide-react'
 import { type FormEvent, useState } from 'react'
 import { TeamPicker } from '../../components/pickers'
 import { useScoped } from '../../state/scoped'
-import { AUTHORIZATION_SUGGESTIONS, AVAILABILITIES, AVATAR_COLORS } from './lib'
+import { AVAILABILITIES, AVATAR_COLORS } from './lib'
 
 const SHIFTS: Shift[] = ['A', 'B', 'C', 'N']
 const SHIFT_OPTIONS = SHIFTS.map((s) => ({ value: s, label: SHIFT_LABEL[s] }))
@@ -62,7 +64,7 @@ function TechnicianForm({
   editing: Person | null
   onDone: (person: Person | null) => void
 }) {
-  const { siteId, site, state, teams, technicians, dispatch } = useScoped()
+  const { siteId, site, state, teams, technicians, safetyItems, dispatch } = useScoped()
   const [base] = useState(
     () =>
       editing ?? {
@@ -113,13 +115,17 @@ function TechnicianForm({
   const colors = AVATAR_COLORS.some((c) => c.value.toLowerCase() === base.color.toLowerCase())
     ? AVATAR_COLORS
     : [{ value: base.color, label: 'Current colour' }, ...AVATAR_COLORS]
+  // Permits from master data lead the list; a permit counts as held when its name matches, ignoring case.
+  const held = (name: string) => draft.authorizations.some((a) => a.toLowerCase() === name.toLowerCase())
+  const addPermit = (name: string) => {
+    const permit = name.trim()
+    if (permit && !held(permit)) set({ authorizations: [...draft.authorizations, permit] })
+  }
+  const masterPermits = safetyItems.filter((i) => i.kind === 'permit').map((i) => i.name)
   const permits = [
-    ...new Set([
-      ...AUTHORIZATION_SUGGESTIONS,
-      ...technicians.flatMap((t) => t.technician?.authorizations ?? []),
-      ...draft.authorizations,
-    ]),
+    ...new Set([...masterPermits, ...technicians.flatMap((t) => t.technician?.authorizations ?? []), ...draft.authorizations]),
   ]
+  const suggested = masterPermits.filter((p) => !held(p))
 
   const submit = (e: FormEvent) => {
     e.preventDefault()
@@ -235,7 +241,7 @@ function TechnicianForm({
         <FormField
           label="Authorizations"
           htmlFor="tech-permits"
-          hint="Work permits this person may sign for. Type to add one that is missing."
+          hint="Work permits this person may sign for. Pick a permit from master data or type one that is missing."
           className="sm:col-span-2"
         >
           <MultiCombobox
@@ -247,9 +253,18 @@ function TechnicianForm({
             getLabel={(p) => p}
             placeholder="Add work permits"
             searchPlaceholder="Search or type a permit"
-            onCreate={(p) => set({ authorizations: [...draft.authorizations, p] })}
+            onCreate={addPermit}
             createLabel={(p) => `Add "${p}"`}
           />
+          {suggested.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {suggested.map((p) => (
+                <Chip key={p} icon={<Plus />} aria-label={`Add ${p}`} onClick={() => addPermit(p)}>
+                  {p}
+                </Chip>
+              ))}
+            </div>
+          )}
         </FormField>
         <FormField label="Avatar colour" className="sm:col-span-2">
           <div className="gap-3 flex flex-wrap items-center">

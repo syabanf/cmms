@@ -525,8 +525,10 @@ function MixRow({
 }) {
   return (
     <div className="gap-2 flex items-center">
-      <span className={cn('size-2.5 rounded-sm', color)} />
-      <dt className="flex-1 text-muted">{label}</dt>
+      <dt className="flex flex-1 items-center gap-2 text-muted">
+        <span className={cn('size-2.5 rounded-sm', color)} />
+        {label}
+      </dt>
       <dd className="font-semibold tabular-nums">{value}</dd>
       <dd className="w-11 text-xs text-right text-muted tabular-nums">{fmtPercent(share)}</dd>
     </div>

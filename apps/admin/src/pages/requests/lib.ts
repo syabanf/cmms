@@ -41,10 +41,10 @@ export const toggle = <T,>(list: T[], value: T) => (list.includes(value) ? list.
 
 export const newestFirst = (a: MaintenanceRequest, b: MaintenanceRequest) => toMs(b.reportedAt) - toMs(a.reportedAt)
 
-/** Minutes from the report to the triage decision; null while the request waits in the queue. */
+/** Minutes from the report to the first triage decision; null while the request still waits for one. */
 export function triageMinutes(r: MaintenanceRequest): number | null {
-  if (r.status === 'new' || !r.triagedAt) return null
-  return (toMs(r.triagedAt) - toMs(r.reportedAt)) / MINUTE
+  const first = r.events[0]
+  return first ? (toMs(first.at) - toMs(r.reportedAt)) / MINUTE : null
 }
 
 function median(values: number[]): number | null {

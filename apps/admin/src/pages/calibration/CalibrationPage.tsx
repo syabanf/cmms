@@ -21,11 +21,12 @@ import { CalendarX, ClipboardPlus, Ellipsis, FileCheck2, Gauge, ScanSearch, Sear
 import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { useAuth } from '../../auth/auth'
-import { CalibrationBadge } from '../../components/badges'
+import { CalibrationBadge, ToolStatusBadge } from '../../components/badges'
 import { useCreate } from '../../components/create'
 import { AssetLink, paths } from '../../components/links'
 import { useHistoryState, useTableHistory } from '../../lib/history-state'
 import { useNow, useScoped } from '../../state/scoped'
+import { sendForCalibration } from '../tools/lib'
 import { ToolIcon } from '../tools/ToolIcon'
 import { CAL_KIND_LABEL, type CalKind, type CalRow, type CalTarget, calibrationJobPlan, calibrationRows, daysLeftText, targetKey } from './lib'
 import { RecordCalibrationDialog } from './RecordCalibrationDialog'
@@ -52,7 +53,7 @@ function ToolLink({ row }: { row: CalRow }) {
 }
 
 export function CalibrationPage() {
-  const { assets, tools, calibrations, workOrders, jobPlans, maps } = useScoped()
+  const { assets, tools, calibrations, workOrders, jobPlans, maps, dispatch } = useScoped()
   const { can } = useAuth()
   const create = useCreate()
   const navigate = useNavigate()
@@ -96,7 +97,14 @@ export function CalibrationPage() {
   const actionsFor = (row: CalRow): ActionMenuItem[] => {
     const items: ActionMenuItem[] = []
     if (can('calibration.record')) items.push({ key: 'record', label: 'Record calibration', icon: <FileCheck2 />, onSelect: () => openRecord(row) })
-    const asset = row.kind === 'asset' ? maps.asset.get(row.id) : undefined
+    if (row.kind === 'tool') {
+      // A tool goes out on its own, but not while it is already out or in someone's hands.
+      if (can('tool.manage') && row.status !== 'calibration' && row.status !== 'in_use') {
+        items.push({ key: 'send', label: 'Send for calibration', icon: <Gauge />, onSelect: () => sendForCalibration(dispatch, row) })
+      }
+      return items
+    }
+    const asset = maps.asset.get(row.id)
     if (row.openWo) {
       const wo = row.openWo
       items.push({ key: 'wo', label: `Open ${wo.code}`, description: `Booked for ${fmtDateShort(plannedAt(wo))}`, icon: <ClipboardPlus />, onSelect: () => navigate(paths.workOrder(wo.id)) })
@@ -122,6 +130,7 @@ export function CalibrationPage() {
           <div className="mt-1.5 flex flex-wrap items-center gap-1.5 sm:hidden">
             <CalibrationBadge state={r.state} />
             <span className={cn('text-xs', r.daysLeft < 0 ? 'font-semibold text-accent' : 'text-muted')}>{daysLeftText(r.daysLeft)}</span>
+            {r.kind === 'tool' && r.status !== 'available' && <ToolStatusBadge status={r.status} />}
           </div>
         </div>
       ),
@@ -161,6 +170,11 @@ export function CalibrationPage() {
         <div className="whitespace-nowrap">
           <CalibrationBadge state={r.state} />
           {r.openWo && <p className="mt-1 text-[11px] text-muted">Booked for {fmtDateShort(plannedAt(r.openWo))}</p>}
+          {r.kind === 'tool' && r.status !== 'available' && (
+            <div className="mt-1">
+              <ToolStatusBadge status={r.status} />
+            </div>
+          )}
         </div>
       ),
       sortValue: (r) => STATE_RANK[r.state],
@@ -265,7 +279,7 @@ export function CalibrationPage() {
                   {r.code}
                 </Link>{' '}
                 {r.name}, {daysLeftText(r.daysLeft)}
-                {r.openWo ? `, booked for ${fmtDateShort(plannedAt(r.openWo))}` : ''}
+                {r.openWo ? `, booked for ${fmtDateShort(plannedAt(r.openWo))}` : r.kind === 'tool' && r.status === 'calibration' ? ', out for calibration' : ''}
               </li>
             ))}
           </ul>

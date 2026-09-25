@@ -252,7 +252,7 @@ export function PartsCard({ plan, set, readOnly, error }: SectionProps & { error
           const part = maps.part.get(line.partId)
           return (
             <div key={index} className="flex items-center gap-2">
-              <PartPicker className="min-w-0 flex-1" value={line.partId || null} onChange={(partId) => update(index, { partId: partId ?? '' })} />
+              <PartPicker aria-label="Part" className="min-w-0 flex-1" value={line.partId || null} onChange={(partId) => update(index, { partId: partId ?? '' })} />
               <Input
                 className="w-28 shrink-0"
                 type="number"
@@ -364,11 +364,25 @@ export function ToolsCard({ plan, set, readOnly }: SectionProps) {
   )
 }
 
+type SafetyIdKey = 'lotoIds' | 'hazardIds' | 'ppeIds' | 'permitIds'
+
+/** One picker per safety kind, in the order the technician meets them on the phone. */
+const SAFETY_PICKERS: { key: SafetyIdKey; kind: SafetyKind; label: string; noun: string; hint?: string }[] = [
+  { key: 'lotoIds', kind: 'loto', label: 'Lock-out points', noun: 'lock-out points', hint: 'Isolation points to lock and tag. Picking one marks LOTO as required.' },
+  { key: 'hazardIds', kind: 'hazard', label: 'Hazards', noun: 'hazards' },
+  { key: 'ppeIds', kind: 'ppe', label: 'PPE', noun: 'PPE' },
+  { key: 'permitIds', kind: 'permit', label: 'Permits', noun: 'permits', hint: 'Permits the assigned technician must hold.' },
+]
+
 export function SafetyCard({ plan, set }: SectionProps) {
   const { safetyItems } = useScoped()
   const safety = plan.safety
   const patch = (p: Partial<SafetyRequirement>) => set({ safety: { ...safety, ...p } })
-  const itemsOf = (kind: SafetyKind) => safetyItems.filter((i) => i.kind === kind)
+  const setIds = (key: SafetyIdKey, ids: string[]) => {
+    const next = { ...safety }
+    next[key] = ids
+    set({ safety: key === 'lotoIds' && ids.length ? { ...next, loto: true } : next })
+  }
 
   return (
     <Card>
@@ -384,36 +398,26 @@ export function SafetyCard({ plan, set }: SectionProps) {
           </span>
           <Switch checked={safety.loto} aria-label="LOTO required" onCheckedChange={(loto) => patch({ loto })} />
         </label>
-        <FormField label="Hazards" htmlFor="jp-hazards">
-          <MultiCombobox
-            id="jp-hazards"
-            items={itemsOf('hazard')}
-            values={safety.hazardIds}
-            placeholder="Choose hazards"
-            searchPlaceholder="Search hazards"
-            getKey={(i) => i.id}
-            getLabel={(i) => i.name}
-            onChange={(hazardIds) => patch({ hazardIds })}
-          />
-        </FormField>
-        <FormField label="PPE" htmlFor="jp-ppe">
-          <MultiCombobox
-            id="jp-ppe"
-            items={itemsOf('ppe')}
-            values={safety.ppeIds}
-            placeholder="Choose PPE"
-            searchPlaceholder="Search PPE"
-            getKey={(i) => i.id}
-            getLabel={(i) => i.name}
-            onChange={(ppeIds) => patch({ ppeIds })}
-          />
-        </FormField>
+        {SAFETY_PICKERS.map(({ key, kind, label, noun, hint }) => (
+          <FormField key={key} label={label} htmlFor={`jp-${kind}`} hint={hint}>
+            <MultiCombobox
+              id={`jp-${kind}`}
+              items={safetyItems.filter((i) => i.kind === kind)}
+              values={safety[key]}
+              placeholder={`Choose ${noun}`}
+              searchPlaceholder={`Search ${noun}`}
+              getKey={(i) => i.id}
+              getLabel={(i) => i.name}
+              onChange={(ids) => setIds(key, ids)}
+            />
+          </FormField>
+        ))}
         <FormField label="Safety notes" htmlFor="jp-safety-notes">
           <Textarea
             id="jp-safety-notes"
             className="min-h-20"
             value={safety.notes}
-            placeholder="Isolation points, permits, what to watch for"
+            placeholder="What to watch for, and anything the lists above do not cover"
             onChange={(e) => patch({ notes: e.target.value })}
           />
         </FormField>

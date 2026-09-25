@@ -158,15 +158,6 @@ export function hoursPerDay(rows: readonly LaborRow[], days: number, now: number
   })
 }
 
-/** Work permits the dialog suggests; people can add their own. */
-export const AUTHORIZATION_SUGGESTIONS = [
-  'LOTO',
-  'High voltage',
-  'Hot work',
-  'Work at height',
-  'Confined space',
-]
-
 export const AVATAR_COLORS = [
   { value: '#0F766E', label: 'Teal' },
   { value: '#0369A1', label: 'Blue' },

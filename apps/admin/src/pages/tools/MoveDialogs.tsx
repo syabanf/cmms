@@ -12,6 +12,7 @@ import {
   DialogTitle,
   FormField,
   SegmentedControl,
+  Textarea,
   toast,
 } from '@cmms/ui'
 import { type FormEvent, useMemo, useState } from 'react'
@@ -56,9 +57,9 @@ function CheckoutForm({ tool, onDone }: { tool: Tool; onDone: () => void }) {
     setTried(true)
     if (!holderId || blocked) return
     const wo = woId ? maps.workOrder.get(woId) : undefined
-    // assignTool puts the tool on the work order and logs it there; checkout then records the chosen holder.
-    if (wo) dispatch({ type: 'workOrders/assignTool', id: wo.id, toolId: tool.id })
-    dispatch({ type: 'tools/checkout', id: tool.id, holderId, woId: wo?.id ?? null })
+    // With a work order, assignTool records the holder and puts the tool on the job in one step.
+    if (wo) dispatch({ type: 'workOrders/assignTool', id: wo.id, toolId: tool.id, holderId })
+    else dispatch({ type: 'tools/checkout', id: tool.id, holderId, woId: null })
     toast(`${tool.code} checked out to ${personName(holderId)}`, {
       tone: 'success',
       description: wo ? `For ${wo.code}, ${wo.title}` : 'No work order linked',
@@ -124,13 +125,13 @@ export function CheckinDialog({ tool, open, onOpenChange }: MoveDialogProps) {
 function CheckinForm({ tool, onDone }: { tool: Tool; onDone: () => void }) {
   const { maps, dispatch, personName } = useScoped()
   const [condition, setCondition] = useState<ToolCondition>(tool.condition)
+  const [note, setNote] = useState('')
   const wo = tool.woId ? maps.workOrder.get(tool.woId) : undefined
 
   const submit = (e: FormEvent) => {
     e.preventDefault()
-    // releaseTool logs the return on the work order; checkin then records the condition.
-    if (wo) dispatch({ type: 'workOrders/releaseTool', id: wo.id, toolId: tool.id })
-    dispatch({ type: 'tools/checkin', id: tool.id, condition })
+    // One return in the log: checkin also takes the tool off its work order.
+    dispatch({ type: 'tools/checkin', id: tool.id, condition, note: note.trim() })
     toast(`${tool.code} checked in`, {
       tone: 'success',
       description: condition === 'poor' ? 'Condition is poor, so it went to repair.' : `Back at ${tool.location || 'the tool crib'}`,
@@ -148,15 +149,20 @@ function CheckinForm({ tool, onDone }: { tool: Tool; onDone: () => void }) {
         </DialogDescription>
       </DialogHeader>
 
-      <FormField label="Condition on return" hint={condition === 'poor' ? 'A poor tool goes to repair instead of back on the shelf.' : undefined}>
-        <SegmentedControl
-          className="w-full"
-          aria-label="Condition on return"
-          value={condition}
-          onChange={(value) => setCondition(asCondition(value))}
-          options={CONDITION_OPTIONS}
-        />
-      </FormField>
+      <div className="grid grid-cols-1 gap-4">
+        <FormField label="Condition on return" hint={condition === 'poor' ? 'A poor tool goes to repair instead of back on the shelf.' : undefined}>
+          <SegmentedControl
+            className="w-full"
+            aria-label="Condition on return"
+            value={condition}
+            onChange={(value) => setCondition(asCondition(value))}
+            options={CONDITION_OPTIONS}
+          />
+        </FormField>
+        <FormField label="Note" hint="Damage, missing parts, anything the next holder should know.">
+          <Textarea value={note} placeholder="Optional" onChange={(e) => setNote(e.target.value)} />
+        </FormField>
+      </div>
 
       <DialogFooter>
         <Button type="button" variant="outline" onClick={onDone}>

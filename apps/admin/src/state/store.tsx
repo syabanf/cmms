@@ -1,4 +1,4 @@
-import { type AppState, type Envelope, loadLocalState, reduce, saveLocalState } from '@cmms/fixtures'
+import { type AppState, type Envelope, loadLocalState, nowIso, reduce, saveLocalState } from '@cmms/fixtures'
 import {
   type Dispatch,
   type ReactNode,
@@ -17,6 +17,13 @@ const STORAGE_KEY = 'cmms.admin.state.v1'
 export function AppStateProvider({ children }: { children: ReactNode }) {
   const [state, send] = useReducer(reduce, undefined, () => loadLocalState(STORAGE_KEY))
   useEffect(() => saveLocalState(STORAGE_KEY, state), [state])
+  // The PM scheduler: a work order appears once a schedule's lead time starts, as a backend job would do.
+  useEffect(() => {
+    const tick = () => send({ action: { type: 'pm/autoGenerate' }, meta: { by: 'system', at: nowIso() } })
+    tick()
+    const timer = setInterval(tick, 60_000)
+    return () => clearInterval(timer)
+  }, [])
   const value = useMemo(() => ({ state, send }), [state])
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>
 }

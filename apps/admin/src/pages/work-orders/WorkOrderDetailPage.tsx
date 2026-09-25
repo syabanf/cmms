@@ -1,4 +1,4 @@
-import { failureEvents, fmtDate, isActive, isOverdue, recentFailures, toMs } from '@cmms/fixtures'
+import { failureEvents, fmtDate, fmtDateTime, isActive, isOverdue, recentFailures, toMs } from '@cmms/fixtures'
 import { Banner, Button, Card, EmptyState } from '@cmms/ui'
 import { ClipboardList, Repeat, ShieldCheck, Siren, TriangleAlert } from 'lucide-react'
 import { useMemo } from 'react'
@@ -57,6 +57,9 @@ function WorkOrderView({ woId }: { woId: string }) {
 
   return (
     <>
+      <p className="mb-4 hidden text-xs text-muted print:block">
+        Job card · {s.site.name} · printed {fmtDateTime(now)}
+      </p>
       <WoHeader wo={wo} access={access} />
 
       <div className="mb-4 space-y-3 empty:hidden">

@@ -1,6 +1,6 @@
 import type { ChecklistItem, JobPlan, PmSchedule, PmTrigger, SafetyRequirement } from '../../packages/types/src/index.ts'
 import { assetId, meterId } from './assets.ts'
-import { partId, sf } from './master.ts'
+import { partId, safetyDetail, sf } from './master.ts'
 
 type Task = Omit<ChecklistItem, 'id'>
 const check = (label: string, required = true): Task => ({ label, type: 'check', required })
@@ -28,6 +28,7 @@ const meas = (
 
 const safety = (loto: boolean, hazards: string[], ppe: string[], notes = ''): SafetyRequirement => ({
   loto,
+  ...safetyDetail(loto, hazards.map(sf)),
   hazardIds: hazards.map(sf),
   ppeIds: ppe.map(sf),
   notes,

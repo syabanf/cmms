@@ -288,10 +288,11 @@ export const STOCK_TXN_LABEL: Record<StockTxnKind, string> = {
   adjust: 'Adjusted',
 }
 
-export type ToolStatus = 'available' | 'in_use' | 'maintenance' | 'lost'
+export type ToolStatus = 'available' | 'in_use' | 'calibration' | 'maintenance' | 'lost'
 export const TOOL_STATUS_LABEL: Record<ToolStatus, string> = {
   available: 'Available',
   in_use: 'In use',
+  calibration: 'At calibration',
   maintenance: 'In repair',
   lost: 'Missing',
 }
@@ -422,10 +423,12 @@ export const FAILURE_CODE_KIND_LABEL: Record<FailureCodeKind, string> = {
 }
 export const FAILURE_CODE_KINDS: FailureCodeKind[] = ['problem', 'mode', 'cause', 'remedy']
 
-export type SafetyKind = 'hazard' | 'ppe'
+export type SafetyKind = 'hazard' | 'ppe' | 'loto' | 'permit'
 export const SAFETY_KIND_LABEL: Record<SafetyKind, string> = {
   hazard: 'Hazard',
   ppe: 'PPE',
+  loto: 'Lock-out point',
+  permit: 'Permit',
 }
 
 export type DocumentType =
@@ -461,6 +464,12 @@ export const DOCUMENT_TYPE_LABEL: Record<DocumentType, string> = {
 }
 
 export type AttachmentKind = 'photo' | 'video' | 'document'
+
+/** Photos taken before the work and after it, for the machine history. */
+export type AttachmentStage = 'before' | 'after'
+export const ATTACHMENT_STAGE_LABEL: Record<AttachmentStage, string> = { before: 'Before', after: 'After' }
+
+export type ToolMovementKind = 'checkout' | 'checkin'
 
 export type WarrantyClaimStatus = 'submitted' | 'approved' | 'rejected'
 export const WARRANTY_CLAIM_STATUS_LABEL: Record<WarrantyClaimStatus, string> = {

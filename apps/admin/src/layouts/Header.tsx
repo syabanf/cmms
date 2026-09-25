@@ -21,7 +21,7 @@ export function Header({ onMenu }: { onMenu: () => void }) {
 
   return (
     <>
-      <header className="flex h-14 shrink-0 items-center gap-3">
+      <header className="flex h-14 shrink-0 items-center gap-3 print:hidden">
         <Button variant="card" size="icon-lg" className="md:hidden" aria-label="Open menu" onClick={onMenu}>
           <Menu />
         </Button>

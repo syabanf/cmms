@@ -2,8 +2,10 @@ import { stockLevel } from '@cmms/fixtures'
 import type { Part, WorkOrder } from '@cmms/types'
 import { PART_CATEGORY_LABEL } from '@cmms/types'
 import { Button, Input, Kicker, Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, cn, toast } from '@cmms/ui'
-import { Check, Minus, Plus, Search } from 'lucide-react'
+import { Check, ChevronRight, Minus, Plus, Search } from 'lucide-react'
 import { useState } from 'react'
+import { Link } from 'react-router'
+import { paths } from '../../lib/paths'
 import { useMobileScope } from '../../state/scope'
 
 export function AddPartSheet({ wo, open, onOpenChange }: { wo: WorkOrder; open: boolean; onOpenChange: (open: boolean) => void }) {
@@ -81,6 +83,7 @@ function AddPartForm({ wo, onDone }: { wo: WorkOrder; onDone: () => void }) {
                 available={available(part.id)}
                 selected={partId === part.id}
                 onPick={() => pick(part, line.qty)}
+                onOpen={onDone}
               />
             ))}
           </>
@@ -96,6 +99,7 @@ function AddPartForm({ wo, onDone }: { wo: WorkOrder; onDone: () => void }) {
                 available={available(part.id)}
                 selected={partId === part.id}
                 onPick={() => pick(part, 1)}
+                onOpen={onDone}
               />
             ))}
           </>
@@ -139,39 +143,52 @@ function AddPartForm({ wo, onDone }: { wo: WorkOrder; onDone: () => void }) {
   )
 }
 
+/** A pickable part, with a chevron that leaves the sheet for the part's own page. */
 function PartRow({
   part,
   hint,
   available,
   selected,
   onPick,
+  onOpen,
 }: {
   part: Part
   hint: string
   available: number
   selected: boolean
   onPick: () => void
+  onOpen: () => void
 }) {
   return (
-    <button
-      type="button"
-      aria-pressed={selected}
-      onClick={onPick}
-      className={cn(
-        'flex min-h-14 w-full items-center gap-3 rounded-2xl px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
-        selected ? 'bg-surface' : 'hover:bg-surface',
-      )}
-    >
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-semibold">{part.name}</span>
-        <span className="block truncate text-xs text-muted">
-          <span className="font-mono">{part.code}</span> · {hint}
+    <div className="flex items-center gap-1">
+      <button
+        type="button"
+        aria-pressed={selected}
+        onClick={onPick}
+        className={cn(
+          'flex min-h-14 min-w-0 flex-1 items-center gap-3 rounded-2xl px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
+          selected ? 'bg-surface' : 'hover:bg-surface',
+        )}
+      >
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-semibold">{part.name}</span>
+          <span className="block truncate text-xs text-muted">
+            <span className="font-mono">{part.code}</span> · {hint}
+          </span>
         </span>
-      </span>
-      <span className={cn('shrink-0 text-xs font-semibold tabular-nums', available > 0 ? 'text-body' : 'text-accent')}>
-        {available > 0 ? `${available} in stock` : 'Out of stock'}
-      </span>
-      {selected && <Check aria-hidden="true" className="size-4 shrink-0 text-accent" />}
-    </button>
+        <span className={cn('shrink-0 text-xs font-semibold tabular-nums', available > 0 ? 'text-body' : 'text-accent')}>
+          {available > 0 ? `${available} in stock` : 'Out of stock'}
+        </span>
+        {selected && <Check aria-hidden="true" className="size-4 shrink-0 text-accent" />}
+      </button>
+      <Link
+        to={paths.part(part.id)}
+        aria-label={`${part.name} details`}
+        onClick={onOpen}
+        className="flex size-11 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+      >
+        <ChevronRight aria-hidden="true" className="size-4" />
+      </Link>
+    </div>
   )
 }

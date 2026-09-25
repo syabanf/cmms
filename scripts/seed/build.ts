@@ -25,7 +25,7 @@ import { APPROVAL_LEVEL_LABEL, WAITING_REASON_LABEL } from '../../packages/types
 import { evaluateItem } from '../../packages/fixtures/src/checklist.ts'
 import { HOUR, MINUTE, toIso, wib } from '../../packages/fixtures/src/dates.ts'
 import { A } from './assets.ts'
-import { failureCodes, fcId, partId, parts, people, sf } from './master.ts'
+import { failureCodes, fcId, partId, parts, people, safetyDetail, sf } from './master.ts'
 import { JP, pmId } from './plans.ts'
 import { rng } from './rng.ts'
 import { toolId } from './tools.ts'
@@ -160,10 +160,17 @@ function normalValue(t: Task): TaskResult['value'] {
 }
 
 function defaultSafety(team: string): SafetyRequirement {
-  if (team.includes('elec')) return { loto: true, hazardIds: [sf('electrical')], ppeIds: [sf('egloves'), sf('glasses'), sf('shoes')], notes: '' }
-  if (team.includes('utl')) return { loto: true, hazardIds: [sf('pressure'), sf('hot')], ppeIds: [sf('gloves'), sf('glasses'), sf('ear')], notes: '' }
-  if (team.includes('inst')) return { loto: false, hazardIds: [], ppeIds: [sf('glasses')], notes: '' }
-  return { loto: true, hazardIds: [sf('rotating')], ppeIds: [sf('glasses'), sf('gloves'), sf('shoes')], notes: '' }
+  const build = (loto: boolean, hazards: string[], ppe: string[]): SafetyRequirement => ({
+    loto,
+    ...safetyDetail(loto, hazards.map(sf)),
+    hazardIds: hazards.map(sf),
+    ppeIds: ppe.map(sf),
+    notes: '',
+  })
+  if (team.includes('elec')) return build(true, ['electrical'], ['egloves', 'glasses', 'shoes'])
+  if (team.includes('utl')) return build(true, ['pressure', 'hot'], ['gloves', 'glasses', 'ear'])
+  if (team.includes('inst')) return build(false, [], ['glasses'])
+  return build(true, ['rotating'], ['glasses', 'gloves', 'shoes'])
 }
 
 const GENERIC_TASKS: Task[] = [
@@ -182,6 +189,7 @@ function photoAttachments(count: number, at: number, by: string): Attachment[] {
   return Array.from({ length: count }, () => ({
     id: `att-${String(++attachmentSeq).padStart(4, '0')}`,
     kind: 'photo' as const,
+    stage: null,
     name: `IMG_${2000 + ((attachmentSeq * 37) % 7000)}.jpg`,
     url: null,
     at: toIso(at),
@@ -412,6 +420,8 @@ export function buildMr(s: MrSpec): MaintenanceRequest {
     triageNote: s.triageNote ?? '',
     triagedBy: s.triagedBy ?? null,
     triagedAt: s.triagedAt !== undefined ? toIso(s.triagedAt) : null,
+    events:
+      s.triagedBy && s.triagedAt !== undefined ? [{ id: 'r1', at: toIso(s.triagedAt), by: s.triagedBy, status: s.status, note: s.triageNote ?? '' }] : [],
   }
 }
 

@@ -2,7 +2,7 @@ import type { ComponentProps } from 'react'
 import { X } from 'lucide-react'
 import { Dialog as DialogPrimitive } from 'radix-ui'
 import { cn } from '../lib/cn'
-import { closeButtonClass, overlayClass } from '../lib/overlay'
+import { closeButtonClass, overlayClass, useReturnFocus } from '../lib/overlay'
 
 export const Dialog = DialogPrimitive.Root
 export const DialogTrigger = DialogPrimitive.Trigger
@@ -20,11 +20,13 @@ export type DialogContentProps = ComponentProps<typeof DialogPrimitive.Content> 
   hideClose?: boolean
 }
 
-export function DialogContent({ size = 'md', hideClose = false, className, children, ...props }: DialogContentProps) {
+export function DialogContent({ size = 'md', hideClose = false, className, children, onOpenAutoFocus, onCloseAutoFocus, ...props }: DialogContentProps) {
+  const focus = useReturnFocus({ onOpenAutoFocus, onCloseAutoFocus })
   return (
     <DialogPrimitive.Portal>
       <DialogPrimitive.Overlay className={overlayClass} />
       <DialogPrimitive.Content
+        {...focus}
         className={cn(
           'fixed left-1/2 top-1/2 z-50 max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-card bg-card p-6 text-foreground shadow-float outline-none duration-200 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95',
           sizes[size],

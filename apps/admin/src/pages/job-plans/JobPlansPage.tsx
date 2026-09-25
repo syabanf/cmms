@@ -67,6 +67,7 @@ export function JobPlansPage() {
               type="search"
               className="w-full sm:w-64"
               leftIcon={<Search />}
+              aria-label="Search job plans"
               placeholder="Search code, name or tool"
               value={query}
               onChange={(e) => setQuery(e.target.value)}

@@ -98,6 +98,40 @@ Follow `~/.claude/skills/wit-ui-style` (SKILL.md and references). In short:
 - Empty states always name the next action. Every button does something real, and actions confirm with
   `toast(...)`. Destructive actions go through `ConfirmDialog`.
 
+## Domain rules the store enforces
+
+- **Safety.** A job plan's `safety` lists `loto` (yes or no), `lotoIds` (lock-out points), `permitIds`
+  (permits), `hazardIds` and `ppeIds`; all are safety items from master data. A work order copies the
+  plan's list. A permit counts as held when its name matches one of the technician's `authorizations`.
+- **Tools.** Every check-out and return lands in `toolMovements`; the tool's own `status` says where it
+  is now. Tools never get work orders: send a measuring tool out with status `calibration`, and saving
+  its calibration record brings it back (`available`, or `maintenance` when it failed).
+- **Requests** keep every triage decision in `events`; `triagedBy`, `triagedAt` and `triageNote` hold the
+  latest one. Completing any work order whose checklist has a warning or failed line raises a request
+  from that work order (`inspectionWoId`), whatever the work type.
+- **PM.** The store provider dispatches `pm/autoGenerate` on load and every minute (as "PM scheduler",
+  `by: 'system'`): a work order appears once a schedule's lead time starts. Deleting a schedule cancels
+  its generated work that nobody started; work in progress keeps running.
+- **Asset types** carry `defaultScores`: the criticality scores a new asset of that type starts with.
+- **Photos** carry `stage` (before, after or null) so the machine history can tell them apart.
+- **Persisted state.** Each app keeps its state in local storage under a version number
+  (`packages/fixtures/src/persistence.ts`). Bump `STORAGE_VERSION` whenever the state shape changes, so
+  older saved states fall back to the seed.
+
+## Accessibility and print
+
+- A picker or input without a visible label gets an `aria-label`. Icon-only buttons get `aria-label`.
+  A `Combobox` with an `id` is named by its `FormField` label; without one, its placeholder names it.
+- `PageHeader` renders the page's `h1` and `CardTitle` renders `h2`; headings inside a card start at `h3`.
+- The layout has a "Skip to content" link that jumps to `main`. Dialogs and sheets trap focus and close
+  on Escape (Radix). Every control shows a focus ring (`focus-visible:ring-2 ring-accent/40`).
+- A `<dl>` holds only `dt` and `dd` pairs (optionally wrapped in `div`); put icons inside the `dt`.
+- Print: the shell hides the rail, header, tabs and card actions (`print:hidden`), cards get a hairline
+  border and never split across pages, and `main` stops scrolling so the whole job card prints.
+  `QrLabel` prints the label alone by hiding everything else on `body`.
+- White text on the accent red is 4.4:1, under the 4.5:1 AA threshold for small text. Keep body copy
+  off accent backgrounds; the brand colour stays as it is unless the product owner changes it.
+
 ## Writing
 
 UI copy, comments and docs: no em or en dashes (use a period, comma, colon or hyphen), no filler

@@ -2,7 +2,7 @@ import { calibrationState, fmtDate, toMs, toolBlockReason } from '@cmms/fixtures
 import type { Tool, ToolStatus } from '@cmms/types'
 import { TOOL_STATUS_LABEL } from '@cmms/types'
 import { ActionMenu, type ActionMenuItem, Banner, Button, Card, ConfirmDialog, EmptyState, PageHeader, toast } from '@cmms/ui'
-import { CircleCheck, Construction, Ellipsis, FileCheck2, LogIn, LogOut, Pencil, SearchX, ShieldX, Trash2, Warehouse } from 'lucide-react'
+import { CircleCheck, Construction, Ellipsis, FileCheck2, Gauge, LogIn, LogOut, Pencil, SearchX, ShieldX, Trash2, Warehouse } from 'lucide-react'
 import { type ReactNode, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { useAuth } from '../../auth/auth'
@@ -10,7 +10,7 @@ import { BackButton } from '../../components/BackButton'
 import { ToolStatusBadge } from '../../components/badges'
 import { useNow, useScoped } from '../../state/scoped'
 import { RecordCalibrationDialog } from '../calibration/RecordCalibrationDialog'
-import { toolUses } from './lib'
+import { sendForCalibration, toolUses } from './lib'
 import { CheckinDialog, CheckoutDialog } from './MoveDialogs'
 import { CalibrationPlanCard, CalibrationRecordsCard, CurrentUseCard, DetailsCard, UsesCard } from './ToolDetailCards'
 import { ToolDialog } from './ToolDialog'
@@ -86,6 +86,12 @@ const STATUS_CHANGE: Record<SettableStatus, { label: string; icon: ReactNode; ti
     title: (code) => `Mark ${code} available?`,
     effect: 'goes back on the shelf and can be checked out again',
   },
+  calibration: {
+    label: 'Send for calibration',
+    icon: <Gauge />,
+    title: (code) => `Send ${code} for calibration?`,
+    effect: 'leaves the crib and stays off work orders until you record its calibration',
+  },
   maintenance: {
     label: 'Send to repair',
     icon: <Construction />,
@@ -100,8 +106,11 @@ const STATUS_CHANGE: Record<SettableStatus, { label: string; icon: ReactNode; ti
   },
 }
 
+/** Menu order of the status changes. */
+const STATUSES: SettableStatus[] = ['available', 'calibration', 'maintenance', 'lost']
+
 function ToolView({ tool }: { tool: Tool }) {
-  const { workOrders, calibrations, dispatch } = useScoped()
+  const { toolMovements, calibrations, dispatch } = useScoped()
   const { can } = useAuth()
   const navigate = useNavigate()
   const now = useNow(60_000)
@@ -115,7 +124,7 @@ function ToolView({ tool }: { tool: Tool }) {
   const expired = calibrationState(plan, now) === 'expired'
   const inUse = tool.status === 'in_use'
 
-  const uses = useMemo(() => toolUses(tool, workOrders), [tool, workOrders])
+  const uses = useMemo(() => toolUses(tool, toolMovements), [tool, toolMovements])
   const records = useMemo(
     () => calibrations.filter((r) => r.target.kind === 'tool' && r.target.id === tool.id).sort((a, b) => toMs(b.date) - toMs(a.date)),
     [calibrations, tool.id],
@@ -127,11 +136,16 @@ function ToolView({ tool }: { tool: Tool }) {
   }
   const askStatus = (status: SettableStatus) => setStatusChange({ open: true, status })
 
+  // Recording the certificate is what brings a tool back from calibration, so it takes the header's main slot.
+  const recordFirst = tool.status === 'calibration' && canCalibrate
   const menu: (ActionMenuItem | 'separator')[] = []
   if (canManage) {
-    // Mark available is the header's main action for tools in repair or missing.
-    for (const status of ['maintenance', 'lost'] as const) {
+    for (const status of STATUSES) {
       if (status === tool.status) continue
+      // A tool in use comes back through check-in. Otherwise Mark available is the header's main action, unless recording the certificate is.
+      if (status === 'available' && (inUse || !recordFirst)) continue
+      // Only a tool on a calibration plan goes out for calibration.
+      if (status === 'calibration' && !plan) continue
       menu.push({
         key: status,
         label: STATUS_CHANGE[status].label,
@@ -161,7 +175,7 @@ function ToolView({ tool }: { tool: Tool }) {
       <LogOut />
       Check out
     </Button>
-  ) : (
+  ) : recordFirst ? null : (
     <Button onClick={() => askStatus('available')}>
       <CircleCheck />
       Mark available
@@ -192,7 +206,7 @@ function ToolView({ tool }: { tool: Tool }) {
           <>
             {primary}
             {canCalibrate && (
-              <Button variant="outline" onClick={show('calibrate')}>
+              <Button variant={recordFirst ? 'primary' : 'outline'} onClick={show('calibrate')}>
                 <FileCheck2 />
                 Record calibration
               </Button>
@@ -255,7 +269,7 @@ function ToolView({ tool }: { tool: Tool }) {
       <CheckoutDialog tool={tool} open={dialog === 'checkout'} onOpenChange={onDialogChange} />
       <CheckinDialog tool={tool} open={dialog === 'checkin'} onOpenChange={onDialogChange} />
       <RecordCalibrationDialog
-        target={plan ? { kind: 'tool', id: tool.id, code: tool.code, name: tool.name, plan } : null}
+        target={plan ? { kind: 'tool', id: tool.id, code: tool.code, name: tool.name, plan, status: tool.status } : null}
         open={dialog === 'calibrate'}
         onOpenChange={onDialogChange}
       />
@@ -282,6 +296,10 @@ function ToolView({ tool }: { tool: Tool }) {
         confirmLabel={change.label}
         destructive={statusChange.status === 'lost'}
         onConfirm={() => {
+          if (statusChange.status === 'calibration') {
+            sendForCalibration(dispatch, tool)
+            return
+          }
           dispatch({ type: 'tools/setStatus', id: tool.id, status: statusChange.status })
           toast(`${tool.code} is now ${TOOL_STATUS_LABEL[statusChange.status].toLowerCase()}`, { tone: 'success' })
         }}

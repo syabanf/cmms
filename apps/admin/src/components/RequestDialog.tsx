@@ -67,7 +67,7 @@ function RequestForm({ assetId, onDone }: { assetId?: string; onDone: (r: Mainte
       title: draft.title.trim(),
       description: draft.description.trim(),
       reportedAt: at,
-      attachments: photos.map((url, i) => ({ id: `att-${Date.now().toString(36)}-${i}`, kind: 'photo', name: `Photo ${i + 1}.jpg`, url, at, by: user.id })),
+      attachments: photos.map((url, i) => ({ id: `att-${Date.now().toString(36)}-${i}`, kind: 'photo', name: `Photo ${i + 1}.jpg`, url, stage: null, at, by: user.id })),
     }
     dispatch({ type: 'requests/create', item: request })
     onDone(request)

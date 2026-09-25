@@ -28,6 +28,7 @@ export function DashboardPage() {
 
   return (
     <div className="space-y-4">
+      <h1 className="sr-only">Dashboard</h1>
       {can('wo.approve') && pending > 0 && (
         <Banner
           tone="info"

@@ -1,5 +1,6 @@
 import { toolBlockReason } from '@cmms/fixtures'
 import type { Tool, WorkOrder } from '@cmms/types'
+import { TOOL_STATUS_LABEL } from '@cmms/types'
 import {
   Button,
   Card,
@@ -100,11 +101,11 @@ function ToolSheet({
   const { tools, dispatch, personName } = useMobileScope()
   const options = tools.filter((t) => t.category === category)
 
-  // Lost, in repair or out of calibration first; then tools someone else holds.
+  // Missing, in repair, at calibration or out of calibration first; then tools someone else holds.
   const blockOf = (tool: Tool): Block | null => {
     const reason = toolBlockReason(tool)
-    if (reason) return { reason, className: reason === 'In repair' ? 'text-warning' : 'text-accent' }
-    if (tool.status === 'in_use') return { reason: `In use by ${personName(tool.holderId)}`, className: 'text-info' }
+    if (reason) return { reason, className: tool.status === 'maintenance' || tool.status === 'calibration' ? 'text-warning' : 'text-accent' }
+    if (tool.status === 'in_use') return { reason: `${TOOL_STATUS_LABEL.in_use} by ${personName(tool.holderId)}`, className: 'text-info' }
     return null
   }
 

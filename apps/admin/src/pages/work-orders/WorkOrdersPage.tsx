@@ -355,14 +355,14 @@ function FilterControls({
         ))}
       </div>
       <div className={cn('gap-2 flex', stacked ? 'flex-col' : 'flex-wrap')}>
-        <TeamPicker
+        <TeamPicker aria-label="Filter by team"
           variant="inline"
           clearable
           placeholder="All teams"
           value={filters.teamId}
           onChange={(teamId) => onChange({ ...filters, teamId })}
         />
-        <PersonPicker
+        <PersonPicker aria-label="Filter by assignee"
           variant="inline"
           clearable
           allowOnLeave

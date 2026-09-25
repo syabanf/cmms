@@ -24,29 +24,43 @@ interface SafetyRow {
 }
 
 /**
- * One line per lock-out, permit, PPE item and hazard. `permits` are the technician's
+ * One line per lock-out point, permit, PPE item and hazard. `permits` are the technician's
  * authorizations from their profile, or null when a viewer only reads the requirements.
+ * A permit counts as held when its name matches an authorization, whatever the case.
  */
 export function safetyRows(wo: WorkOrder, items: ReadonlyMap<string, SafetyItem>, permits: string[] | null): SafetyRow[] {
+  const { loto, lotoIds, permitIds, ppeIds, hazardIds } = wo.safety
   const rows: SafetyRow[] = []
-  if (wo.safety.loto) {
+  if (lotoIds.length) {
+    for (const id of lotoIds) {
+      rows.push({ id, group: 'loto', label: items.get(id)?.name ?? 'Lock-out point', hint: 'Apply your lock and tag, then test for zero energy.' })
+    }
+  } else if (loto) {
     rows.push({
       id: 'loto',
       group: 'loto',
       label: 'Energy isolated, my lock and tag applied',
-      hint: wo.safety.notes || 'Isolate every energy source and test for zero energy before you touch the machine.',
+      hint: 'Isolate every energy source and test for zero energy before you touch the machine.',
     })
-    const held = !!permits?.includes('LOTO')
+  }
+  // An order that names no permit but asks for LOTO still needs the LOTO authorization.
+  const permitNames: [string, string][] = permitIds.length
+    ? permitIds.map((id) => [id, items.get(id)?.name ?? 'Permit'])
+    : loto
+      ? [['permit-loto', 'LOTO']]
+      : []
+  for (const [id, name] of permitNames) {
+    const held = permits?.some((p) => p.toLowerCase() === name.toLowerCase()) ?? false
     rows.push({
-      id: 'permit-loto',
+      id,
       group: 'permit',
-      label: 'LOTO authorization',
+      label: name,
       hint: permits === null ? 'Required for this job' : held ? 'On your profile' : 'Not on your profile. Work with an authorized colleague.',
       warn: permits !== null && !held,
     })
   }
-  for (const id of wo.safety.ppeIds) rows.push({ id, group: 'ppe', label: items.get(id)?.name ?? 'PPE item' })
-  for (const id of wo.safety.hazardIds) rows.push({ id, group: 'hazard', label: items.get(id)?.name ?? 'Hazard' })
+  for (const id of ppeIds) rows.push({ id, group: 'ppe', label: items.get(id)?.name ?? 'PPE item' })
+  for (const id of hazardIds) rows.push({ id, group: 'hazard', label: items.get(id)?.name ?? 'Hazard' })
   return rows
 }
 
@@ -87,7 +101,7 @@ export function SafetyCard({
             Confirmed by {personName(confirmedBy)} · {fmtWhen(wo.safety.confirmedAt)}
           </p>
         )}
-        {wo.safety.notes && !wo.safety.loto && <p className="rounded-2xl bg-warning-soft px-4 py-3 text-sm text-body">{wo.safety.notes}</p>}
+        {wo.safety.notes && <p className="rounded-2xl bg-warning-soft px-4 py-3 text-sm text-body">{wo.safety.notes}</p>}
         {GROUPS.map((group) => {
           const list = rows.filter((r) => r.group === group.id)
           if (!list.length) return null

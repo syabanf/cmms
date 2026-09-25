@@ -1,5 +1,5 @@
 import { fmtNumber, newId, plural } from '@cmms/fixtures'
-import type { SafetyItem, SafetyKind } from '@cmms/types'
+import type { SafetyItem, SafetyKind, SafetyRequirement } from '@cmms/types'
 import { SAFETY_KIND_LABEL } from '@cmms/types'
 import {
   Badge,
@@ -9,11 +9,12 @@ import {
   FormField,
   IconTile,
   Input,
+  NativeSelect,
   PillTabs,
-  SegmentedControl,
+  type Tone,
   toast,
 } from '@cmms/ui'
-import { HardHat, ShieldAlert, TriangleAlert } from 'lucide-react'
+import { FileBadge, HardHat, Lock, ShieldAlert, TriangleAlert } from 'lucide-react'
 import { type ReactNode, useMemo } from 'react'
 import { useHistoryState, useTableHistory } from '../../../lib/history-state'
 import { useScoped } from '../../../state/scoped'
@@ -31,12 +32,34 @@ import {
 
 type KindFilter = 'all' | SafetyKind
 
-const KINDS: SafetyKind[] = ['hazard', 'ppe']
-const KIND_ICON: Record<SafetyKind, ReactNode> = { hazard: <TriangleAlert />, ppe: <HardHat /> }
+const KINDS: SafetyKind[] = ['hazard', 'ppe', 'loto', 'permit']
+const KIND_ICON: Record<SafetyKind, ReactNode> = {
+  hazard: <TriangleAlert />,
+  ppe: <HardHat />,
+  loto: <Lock />,
+  permit: <FileBadge />,
+}
+const KIND_TONE: Record<SafetyKind, Tone> = { hazard: 'warning', ppe: 'default', loto: 'ink', permit: 'info' }
+const KIND_PLURAL: Record<SafetyKind, string> = {
+  hazard: 'Hazards',
+  ppe: 'PPE',
+  loto: 'Lock-out points',
+  permit: 'Permits',
+}
 const KIND_OPTIONS = KINDS.map((k) => ({ value: k, label: SAFETY_KIND_LABEL[k] }))
-const EXAMPLE: Record<SafetyKind, string> = { hazard: 'Arc flash', ppe: 'Safety glasses' }
+const EXAMPLE: Record<SafetyKind, string> = {
+  hazard: 'Arc flash',
+  ppe: 'Safety glasses',
+  loto: 'Electrical isolation at the main breaker',
+  permit: 'Hot work',
+}
 
-const safetyIds = (s: { hazardIds: string[]; ppeIds: string[] }) => [...s.hazardIds, ...s.ppeIds]
+/** Every safety item a job plan or work order lists, whatever its kind. */
+const safetyIds = (s: SafetyRequirement) => [...s.hazardIds, ...s.ppeIds, ...s.lotoIds, ...s.permitIds]
+
+/** A permit counts as held when its name matches an authorization, ignoring case. */
+const holds = (authorizations: readonly string[], permit: string) =>
+  authorizations.some((a) => a.toLowerCase() === permit.toLowerCase())
 
 export function SafetyItemsTab({ canEdit }: { canEdit: boolean }) {
   const { state, dispatch } = useScoped()
@@ -47,11 +70,17 @@ export function SafetyItemsTab({ canEdit }: { canEdit: boolean }) {
 
   const planUse = useMemo(() => tally(state.jobPlans.flatMap((j) => safetyIds(j.safety))), [state.jobPlans])
   const woUse = useMemo(() => tally(state.workOrders.flatMap((w) => safetyIds(w.safety))), [state.workOrders])
+  const authorizations = useMemo(
+    () => state.people.flatMap((p) => (p.technician ? [p.technician.authorizations] : [])),
+    [state.people],
+  )
   const terms = searchTerms(query)
   const searched = state.safetyItems.filter((s) => matches(terms, s.name, SAFETY_KIND_LABEL[s.kind]))
   const rows = kind === 'all' ? searched : searched.filter((s) => s.kind === kind)
   const plans = (s: SafetyItem) => planUse.get(s.id) ?? 0
   const orders = (s: SafetyItem) => woUse.get(s.id) ?? 0
+  const technicians = (s: SafetyItem) =>
+    s.kind === 'permit' ? authorizations.filter((held) => holds(held, s.name)).length : 0
 
   const columns: Column<SafetyItem>[] = [
     {
@@ -60,13 +89,14 @@ export function SafetyItemsTab({ canEdit }: { canEdit: boolean }) {
       sortValue: (s) => s.name,
       cell: (s) => (
         <div className="gap-3 flex items-center">
-          <IconTile size="sm" tone={s.kind === 'hazard' ? 'warning' : 'default'}>
+          <IconTile size="sm" tone={KIND_TONE[s.kind]}>
             {KIND_ICON[s.kind]}
           </IconTile>
           <div className="min-w-0">
             <p className="font-semibold">{s.name}</p>
             <p className="text-xs sm:hidden text-muted">
               {SAFETY_KIND_LABEL[s.kind]} · {plural(plans(s), 'job plan')}
+              {s.kind === 'permit' ? ` · ${plural(technicians(s), 'technician')}` : ''}
             </p>
           </div>
         </div>
@@ -95,6 +125,14 @@ export function SafetyItemsTab({ canEdit }: { canEdit: boolean }) {
       sortValue: orders,
       cell: (s) => <span className="tabular-nums">{fmtNumber(orders(s))}</span>,
     },
+    {
+      id: 'technicians',
+      header: 'Technicians',
+      hideBelow: 'lg',
+      align: 'right',
+      sortValue: technicians,
+      cell: (s) => (s.kind === 'permit' ? <span className="tabular-nums">{fmtNumber(technicians(s))}</span> : null),
+    },
   ]
   if (canEdit) {
     columns.push({
@@ -114,7 +152,7 @@ export function SafetyItemsTab({ canEdit }: { canEdit: boolean }) {
     <Card>
       <ListHeader
         title="Safety items"
-        usedIn="The phone's Safety step lists these before work starts."
+        usedIn="The phone's Safety step lists these before work starts. Permits also match technicians' authorizations by name."
         query={query}
         onQuery={setQuery}
         searchLabel="Search safety items"
@@ -131,7 +169,7 @@ export function SafetyItemsTab({ canEdit }: { canEdit: boolean }) {
             { value: 'all', label: 'All', count: searched.length },
             ...KINDS.map((k) => ({
               value: k,
-              label: k === 'hazard' ? 'Hazards' : SAFETY_KIND_LABEL[k],
+              label: KIND_PLURAL[k],
               count: searched.filter((s) => s.kind === k).length,
             })),
           ]}
@@ -160,8 +198,11 @@ export function SafetyItemsTab({ canEdit }: { canEdit: boolean }) {
           editing={editor.dialog.editing}
           initialKind={editor.dialog.preset ?? 'hazard'}
           inUse={
-            editor.dialog.editing ? plans(editor.dialog.editing) + orders(editor.dialog.editing) > 0 : false
+            editor.dialog.editing
+              ? plans(editor.dialog.editing) + orders(editor.dialog.editing) + technicians(editor.dialog.editing) > 0
+              : false
           }
+          holders={editor.dialog.editing ? technicians(editor.dialog.editing) : 0}
           onDone={(saved) => {
             editor.setDialogOpen(false)
             if (saved)
@@ -182,10 +223,11 @@ export function SafetyItemsTab({ canEdit }: { canEdit: boolean }) {
             ? usageOf([
                 [plans(target), 'job plan'],
                 [orders(target), 'work order'],
+                [technicians(target), 'technician'],
               ])
             : []
         }
-        consequence="No job plan or work order lists it."
+        consequence="No job plan, work order or technician lists it."
         onConfirm={() => {
           if (!target) return
           dispatch({ type: 'safetyItems/remove', id: target.id })
@@ -200,11 +242,14 @@ function SafetyItemForm({
   editing,
   initialKind,
   inUse,
+  holders,
   onDone,
 }: {
   editing: SafetyItem | null
   initialKind: SafetyKind
   inUse: boolean
+  /** Technicians whose authorizations name this permit. */
+  holders: number
   onDone: (saved: SafetyItem | null) => void
 }) {
   const { state, dispatch } = useScoped()
@@ -234,26 +279,33 @@ function SafetyItemForm({
   return (
     <EntityForm
       title={editing ? `Edit ${editing.name}` : 'Add safety item'}
-      description="Job plans list the hazards and PPE for a task, and the technician confirms them on the phone."
+      description="Job plans list the hazards, PPE, lock-out points and permits for a task, and the technician confirms them on the phone before work starts."
       submitLabel={editing ? 'Save changes' : 'Add item'}
       onSubmit={submit}
       onCancel={() => onDone(null)}
     >
       <FormField
         label="Kind"
-        hint={inUse ? 'Job plans or work orders list it, so its kind stays.' : undefined}
+        htmlFor="sf-kind"
+        hint={inUse ? 'Job plans, work orders or technicians list it, so its kind stays.' : undefined}
         className="sm:col-span-2"
       >
-        <SegmentedControl
-          aria-label="Kind"
+        <NativeSelect
+          id="sf-kind"
           options={KIND_OPTIONS}
           value={draft.kind}
           disabled={inUse}
-          onChange={(v) => set({ kind: v as SafetyKind })}
-          className="sm:w-72 w-full"
+          onChange={(e) => set({ kind: e.target.value as SafetyKind })}
         />
       </FormField>
-      <FormField label="Name" required htmlFor="sf-name" error={show(errors.name)} className="sm:col-span-2">
+      <FormField
+        label="Name"
+        required
+        htmlFor="sf-name"
+        error={show(errors.name)}
+        hint={holders ? `${plural(holders, 'technician')} hold it by name. After a rename, update their authorizations to match.` : undefined}
+        className="sm:col-span-2"
+      >
         <Input
           id="sf-name"
           value={draft.name}

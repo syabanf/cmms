@@ -8,6 +8,7 @@ export const paths = {
   workOrder: (id: string, step?: string) => (step ? `/work/${id}?step=${step}` : `/work/${id}`),
   scan: '/scan',
   asset: (code: string) => `/asset/${encodeURIComponent(code)}`,
+  part: (id: string) => `/parts/${id}`,
   requests: '/requests',
   request: (id: string) => `/requests/${id}`,
   newRequest: (assetCode?: string) => (assetCode ? `/requests/new?asset=${encodeURIComponent(assetCode)}` : '/requests/new'),

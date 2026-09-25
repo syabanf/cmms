@@ -433,7 +433,8 @@ export const vendors: Vendor[] = [
   },
 ]
 
-export const assetTypes: AssetType[] = [
+/** Default criticality scores are filled in by the generator from the seeded assets. */
+export const assetTypes: Omit<AssetType, 'defaultScores'>[] = [
   { id: 'at-polisher', name: 'Polishing Machine', category: 'production', icon: 'polisher' },
   { id: 'at-lathe', name: 'CNC Lathe', category: 'production', icon: 'lathe' },
   { id: 'at-vmc', name: 'CNC Machining Center', category: 'production', icon: 'mill' },
@@ -541,7 +542,35 @@ export const safetyItems: SafetyItem[] = [
   si('ppe', 'heatgloves', 'Heat-resistant gloves'),
   si('ppe', 'ear', 'Ear protection'),
   si('ppe', 'harness', 'Safety harness'),
+  si('loto', 'elec-iso', 'Electrical isolation at the main breaker'),
+  si('loto', 'pneu-iso', 'Pneumatic isolation and bleed-down'),
+  si('loto', 'hyd-iso', 'Hydraulic isolation and pressure release'),
+  si('loto', 'gas-iso', 'Gas valve isolation'),
+  si('loto', 'mech-block', 'Mechanical block on moving parts'),
+  si('permit', 'loto-auth', 'LOTO'),
+  si('permit', 'hotwork', 'Hot work'),
+  si('permit', 'confined', 'Confined space'),
+  si('permit', 'height', 'Work at height'),
+  si('permit', 'hv', 'High voltage'),
 ]
+
+/**
+ * Lock-out points and permits that follow from a plan's hazards. Electrical isolation is the
+ * baseline for any LOTO job; pressure, gas and crushing hazards add their own points.
+ */
+export function safetyDetail(loto: boolean, hazards: readonly string[]): { lotoIds: string[]; permitIds: string[] } {
+  const has = (h: string) => hazards.includes(sf(h))
+  const lotoIds = loto
+    ? [sf('elec-iso'), ...(has('pressure') ? [sf('pneu-iso')] : []), ...(has('fire') ? [sf('gas-iso')] : []), ...(has('crushing') ? [sf('mech-block')] : [])]
+    : []
+  const permitIds = [
+    ...(loto ? [sf('loto-auth')] : []),
+    ...(has('fire') ? [sf('hotwork')] : []),
+    ...(has('arcflash') ? [sf('hv')] : []),
+    ...(has('height') ? [sf('height')] : []),
+  ]
+  return { lotoIds, permitIds }
+}
 export const sf = (key: string) => `sf-${key}`
 
 export const warehouses: Warehouse[] = [

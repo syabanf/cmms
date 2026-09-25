@@ -5,7 +5,8 @@ import { cn } from '../lib/cn'
 const cardVariants = cva('', {
   variants: {
     variant: {
-      default: 'rounded-card bg-card shadow-card',
+      // On paper a hairline border replaces the shadow, and a card never splits across pages.
+      default: 'rounded-card bg-card shadow-card print:break-inside-avoid print:border print:border-border print:shadow-none',
       // `isolate` lets the blob sit at -z-10: behind the content, above the ink fill.
       ink: 'relative isolate overflow-hidden rounded-hero bg-ink text-on-ink shadow-float',
       accent: 'rounded-card bg-accent text-white shadow-glow',
@@ -44,13 +45,14 @@ export function CardHeader({ action, className, children, ...props }: CardHeader
   return (
     <div className={cn('flex flex-wrap items-start justify-between gap-2 p-5', className)} {...props}>
       <div className="flex min-w-0 flex-1 flex-col gap-1">{children}</div>
-      <div className="flex shrink-0 items-center gap-2">{action}</div>
+      <div className="flex shrink-0 items-center gap-2 print:hidden">{action}</div>
     </div>
   )
 }
 
-export function CardTitle({ className, ...props }: ComponentProps<'h3'>) {
-  return <h3 className={cn('text-base font-semibold leading-tight', className)} {...props} />
+/** Cards sit under the page's h1, so their titles are h2. */
+export function CardTitle({ className, ...props }: ComponentProps<'h2'>) {
+  return <h2 className={cn('text-base font-semibold leading-tight', className)} {...props} />
 }
 
 export function CardDescription({ className, ...props }: ComponentProps<'p'>) {

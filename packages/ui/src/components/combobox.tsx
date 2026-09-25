@@ -119,7 +119,8 @@ function ComboboxRoot<T>(props: RootProps<T>) {
       aria-haspopup="listbox"
       aria-expanded={open}
       aria-controls={open ? listId : undefined}
-      aria-label={ariaLabel}
+      // A combobox takes no name from its content. A field label names it through `id`; otherwise the placeholder does.
+      aria-label={ariaLabel ?? (id ? undefined : placeholder)}
       aria-describedby={field.describedBy}
       aria-invalid={isInvalid || undefined}
       disabled={disabled}
