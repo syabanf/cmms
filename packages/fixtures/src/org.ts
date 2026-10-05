@@ -34,6 +34,17 @@ export function subtreeIds(items: readonly { id: string; parentId: string | null
   return ids
 }
 
+/** The top of a parent chain: a component's machine, or the item itself when it has no parent. */
+export function rootId<T extends { id: string; parentId: string | null }>(id: string, byId: ReadonlyMap<string, T>): string {
+  let current = byId.get(id)
+  const seen = new Set<string>()
+  while (current?.parentId && !seen.has(current.id)) {
+    seen.add(current.id)
+    current = byId.get(current.parentId)
+  }
+  return current?.id ?? id
+}
+
 /** The area an asset sits in (or its plant when it hangs directly off one). */
 export function areaOf(locations: readonly Location[], locationId: string): Location | undefined {
   const trail = locationTrail(locations, locationId)

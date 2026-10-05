@@ -21,6 +21,7 @@ export const router = createBrowserRouter([
     HydrateFallback: () => <div className="h-dvh bg-surface" />,
     children: [
       { index: true, lazy: page(() => import('./pages/dashboard/DashboardPage'), 'DashboardPage') },
+      { path: 'plant', lazy: page(() => import('./pages/plant/PlantViewPage'), 'PlantViewPage') },
       { path: 'assets', lazy: page(() => import('./pages/assets/AssetsPage'), 'AssetsPage') },
       { path: 'assets/:id', lazy: page(() => import('./pages/assets/AssetDetailPage'), 'AssetDetailPage') },
       { path: 'work', element: <Navigate to="/work/orders" replace /> },

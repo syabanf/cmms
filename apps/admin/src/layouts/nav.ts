@@ -19,6 +19,7 @@ import {
   Inbox,
   LayoutGrid,
   ListChecks,
+  Map as MapIcon,
   Microscope,
   Package,
   Settings2,
@@ -50,6 +51,7 @@ export interface NavSection {
 
 export const NAV: NavSection[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutGrid, to: '/' },
+  { id: 'plant', label: 'Plant view', icon: MapIcon, to: '/plant' },
   { id: 'assets', label: 'Assets', icon: Factory, to: '/assets' },
   {
     id: 'work',

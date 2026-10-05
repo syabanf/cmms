@@ -1,0 +1,72 @@
+{
+  "product": "cmms",
+  "client": "Belum ditentukan",
+  "style": "wit-code-agent",
+  "base": null,
+  "checks": [
+    {
+      "name": "Pemeriksaan tipe",
+      "cmd": "pnpm typecheck"
+    },
+    {
+      "name": "Build",
+      "cmd": "pnpm build"
+    }
+  ],
+  "themes": [
+    "light"
+  ],
+  "apps": {
+    "admin": {
+      "devices": [
+        "desktop",
+        "tablet",
+        "phone"
+      ],
+      "dist": "apps/admin/dist",
+      "baseUrl": "http://localhost:4273",
+      "start": "pnpm --filter @cmms/admin preview --port 4273 --strictPort",
+      "localStorage": {
+        "cmms.admin.session": {
+          "personId": "per-rina",
+          "siteId": "site-bdg"
+        }
+      }
+    },
+    "mobile": {
+      "devices": [
+        "phone"
+      ],
+      "dist": "apps/mobile/dist",
+      "baseUrl": "http://localhost:4274",
+      "start": "pnpm --filter @cmms/mobile preview --port 4274 --strictPort",
+      "localStorage": {}
+    }
+  },
+  "screens": [
+    {
+      "app": "admin",
+      "path": "/plant",
+      "name": "Plant view"
+    },
+    {
+      "app": "admin",
+      "path": "/plant?asset=ast-cnv-02",
+      "name": "Plant view, mesin CNV-02 dipilih"
+    },
+    {
+      "app": "admin",
+      "path": "/assets/ast-cnv-02",
+      "name": "Paspor aset CNV-02"
+    },
+    {
+      "app": "admin",
+      "path": "/work/orders/wo-002821",
+      "name": "Detail work order WO-2026-002821"
+    }
+  ],
+  "budgets": {
+    "entryKb": 200,
+    "chunkKb": 100
+  }
+}

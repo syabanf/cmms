@@ -1,4 +1,4 @@
-import { isActive, plural, subtreeIds } from '@cmms/fixtures'
+import { isActive, plural, rootId, subtreeIds } from '@cmms/fixtures'
 import type { Asset, AssetStatus } from '@cmms/types'
 import { ASSET_STATUS_LABEL } from '@cmms/types'
 import {
@@ -20,6 +20,7 @@ import {
   ClipboardPlus,
   Ellipsis,
   Factory,
+  Map as MapIcon,
   MapPin,
   Megaphone,
   Pencil,
@@ -212,6 +213,15 @@ function Passport({ asset }: { asset: Asset }) {
   const menu: (ActionMenuItem | 'separator')[] = [
     { key: 'print', label: 'Print QR label', icon: <Printer />, onSelect: label.print },
   ]
+  if (asset.status !== 'retired') {
+    menu.unshift({
+      key: 'plant',
+      label: 'Show on plant view',
+      description: asset.parentId ? 'Opens the machine it belongs to' : undefined,
+      icon: <MapIcon />,
+      onSelect: () => navigate(paths.plant(rootId(asset.id, maps.asset))),
+    })
+  }
   if (canManage) {
     menu.push('separator')
     for (const action of STATUS_ACTIONS) {

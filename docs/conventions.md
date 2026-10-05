@@ -49,6 +49,10 @@ Dependencies point down only. Pages compose; business rules live in `@cmms/fixtu
 - `components/create.tsx`: `useCreate()` opens the global dialogs: `workOrder(preset?)`,
   `editWorkOrder(wo)`, `request(assetId?)`. A preset with `requestId` converts that request.
 - `lib/storage.ts`: `usePersistentState(key, initial)` for per-viewer preferences (keys `cmms.admin.*`).
+- `lib/wo-steps.ts`: `woSteps(wo, verificationNeeded)` builds the lifecycle pills for `Steps` (work order
+  header and the plant view's tracking card).
+- `lib/brand.ts`: `BRAND`, the hex mirror of the theme tokens for code that classes cannot reach (three.js
+  materials). Change it together with `packages/tailwind-config/theme.css`; class strings stay token-only.
 - `auth/auth.tsx`: `useAuth()` gives `can(permission)`; hide or disable actions the role may not take.
 
 ## Routes and deep links
@@ -74,10 +78,25 @@ Every record opens on its own page. There are no side panels that slide over the
 Query params other screens rely on:
 - `?new=1` opens the create dialog (`/assets`, `/preventive/pm`), `?receive=1` opens a stock receipt (`/inventory/stock`).
 - `?tab=<name>` selects a tab on detail pages that have them (`/assets/:id`).
+- `?asset=<id>` on `/plant` selects a machine and flies the camera to it. Build it with
+  `paths.plant(assetId)`; for a component, pass its machine (`rootId(id, maps.asset)` from `@cmms/fixtures`).
+
+## Plant view (`/plant`)
+
+- The 3D scene is its own lazy chunk (`pages/plant/scene/PlantScene.tsx`) holding three.js,
+  react-three-fiber and drei. Import three only inside `pages/plant/scene/`; the page takes types from
+  `scene/types.ts`. Without WebGL the page shows an `EmptyState` and the cards still work.
+- The floor comes from the location tree (`pages/plant/layout.ts`): one hall per plant, one pad per area,
+  one row per line, machines in code order. A machine without a location lands in a "Location not set"
+  hall. Top-level assets that are not retired count as machines; work on a component counts for its machine.
+- The canvas renders on demand (`frameloop="demand"`). A camera command or any change the scene should show
+  calls `invalidate()`, or nothing moves.
+- Labels are DOM elements over the canvas (`scene/labels.tsx`), never drei `<Html>`. Each anchor carries
+  `data-zoom` (`far`, `mid`, `near`, by screen pixels per metre), and labels show more with `group-data-[zoom=…]`.
 
 ## Look and feel (WIT UI style)
 
-Follow `~/.claude/skills/wit-ui-style` (SKILL.md and references). In short:
+Follow `~/.claude/skills/wit-code-agent` (SKILL.md and references). In short:
 - Canvas `bg-surface`, cards `rounded-card bg-card shadow-card` with no borders, one accent per region,
   ink for the second emphasis, everything else grey. Controls are pills.
 - `PageHeader` (title, one-line description, actions) at the top of every page.

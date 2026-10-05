@@ -1,6 +1,6 @@
 import { fmtWhen, fromInput, isFailureWork, nowIso, taskProgress, toDateTimeInput, transitionsFor } from '@cmms/fixtures'
-import type { WaitingReason, WoStatus, WorkOrder } from '@cmms/types'
-import { WAITING_REASONS, WAITING_REASON_LABEL, WO_STATUS_LABEL } from '@cmms/types'
+import type { WaitingReason, WorkOrder } from '@cmms/types'
+import { WAITING_REASONS, WAITING_REASON_LABEL } from '@cmms/types'
 import {
   ActionMenu,
   type ActionMenuItem,
@@ -18,7 +18,6 @@ import {
   FormField,
   Input,
   Steps,
-  type StepState,
   Textarea,
   cn,
   toast,
@@ -46,34 +45,11 @@ import { PriorityBadge, WoStatusBadge, WoTypeBadge } from '../../../components/b
 import { useCreate } from '../../../components/create'
 import { AssetLink } from '../../../components/links'
 import { PeoplePicker, TeamPicker } from '../../../components/pickers'
+import { woSteps } from '../../../lib/wo-steps'
 import { useScoped } from '../../../state/scoped'
 import type { WoAccess } from './useWoAccess'
 
 type Pending = 'safety' | 'safety-start' | 'wait' | 'complete' | 'verify' | 'close' | 'reopen' | 'cancel' | 'approve' | 'reject' | 'assign' | 'schedule' | null
-
-function stepsFor(wo: WorkOrder, verificationNeeded: boolean) {
-  const flow: WoStatus[] = [
-    'draft',
-    'open',
-    'assigned',
-    'in_progress',
-    ...(wo.status === 'waiting' ? (['waiting'] as const) : []),
-    'completed',
-    ...(verificationNeeded || wo.status === 'verified' ? (['verified'] as const) : []),
-    'closed',
-  ]
-  const current = wo.status === 'cancelled' ? -1 : flow.indexOf(wo.status)
-  const hint: Partial<Record<WoStatus, string | null>> = {
-    in_progress: wo.startedAt && fmtWhen(wo.startedAt),
-    completed: wo.completedAt && fmtWhen(wo.completedAt),
-    verified: wo.verification && fmtWhen(wo.verification.at),
-    closed: wo.closedAt && fmtWhen(wo.closedAt),
-  }
-  return flow.map((status, i) => {
-    const state: StepState = current < 0 ? 'skipped' : i < current ? 'done' : i === current ? 'current' : 'upcoming'
-    return { key: status, label: WO_STATUS_LABEL[status], state, hint: state !== 'upcoming' ? (hint[status] ?? undefined) : undefined }
-  })
-}
 
 export function WoHeader({ wo, access }: { wo: WorkOrder; access: WoAccess }) {
   const { dispatch, user } = useScoped()
@@ -219,7 +195,7 @@ export function WoHeader({ wo, access }: { wo: WorkOrder; access: WoAccess }) {
       {wo.status === 'cancelled' ? (
         <Badge variant="muted">Cancelled</Badge>
       ) : (
-        <Steps steps={stepsFor(wo, access.verificationNeeded)} />
+        <Steps steps={woSteps(wo, access.verificationNeeded)} />
       )}
 
       {pending === 'safety' || pending === 'safety-start' ? (

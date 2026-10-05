@@ -16,6 +16,7 @@ export const paths = {
   rca: (id: string) => `/reliability/rca/${id}`,
   technician: (id: string) => `/people/technicians/${id}`,
   vendor: (id: string) => `/people/vendors/${id}`,
+  plant: (assetId: string) => `/plant?asset=${assetId}`,
 }
 
 /** Code + name of an asset, linking to its passport. */
